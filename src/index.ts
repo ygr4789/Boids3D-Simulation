@@ -70,6 +70,7 @@ let avoidFactor = 0.01;
 let alignFactor = 0.1;
 let cohesionFactor = 0.01;
 let pushFactor = 0.05;
+let seekingFactor = 0.05;
 
 let visibilityRange = 10;
 let velocityLimit = 0.5;
@@ -109,7 +110,8 @@ function update_boids() {
     let vel1 = rule1(i);
     let vel2 = rule2(i);
     let vel3 = rule3(i);
-    boidsV[i].add(vel1).add(vel2).add(vel3);
+    let vel4 = rule4(i);
+    boidsV[i].add(vel1).add(vel2).add(vel3).add(vel4);
     boidsP[i].add(boidsV[i]);
   }
   handle_boundary();
@@ -143,6 +145,11 @@ function rule3(i: number): THREE.Vector3 {
   }
   ret.divideScalar(neighbors.length);
   return ret.multiplyScalar(cohesionFactor);
+}
+function rule4(i: number): THREE.Vector3 {
+  let dir = new THREE.Vector3().subVectors(intersectionPoint, boidsP[i]).normalize();
+  let ret = new THREE.Vector3().subVectors(dir.multiplyScalar(velocityLimit), boidsV[i]);
+  return ret.multiplyScalar(seekingFactor);
 }
 
 function find_neighbors(i: number): Array<number> {
@@ -215,7 +222,6 @@ const raycaster = new THREE.Raycaster();
 window.addEventListener("mousemove", function (e) {
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  console.log(mouse.x, mouse.y);
   planeNormal.copy(camera.position).normalize();
   plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
   raycaster.setFromCamera(mouse, camera);
