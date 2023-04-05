@@ -34,6 +34,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+var _a;
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 var scene = new THREE.Scene();
@@ -66,7 +67,7 @@ var lightBack = new THREE.PointLight(0x0fffff, 1);
 lightBack.position.set(0, -3, -1);
 scene.add(lightBack);
 // # ===========Creating Bound Box ============
-var boundRange = 70;
+var boundRange = 30;
 var bound_material = new THREE.MeshStandardMaterial();
 bound_material.color = new THREE.Color(0x444488);
 bound_material.transparent = true;
@@ -82,17 +83,20 @@ var boidsP = [];
 var boidsV = [];
 var boidsN;
 var boidsShapes = [];
-var protectedRange = 5;
+var protectedRange = 3;
 var avoidFactor = 0.01;
-var alignFactor = 0.05;
-var cohesionFactor = 0.005;
+var alignFactor = 0.1;
+var cohesionFactor = 0.01;
 var pushFactor = 0.05;
 var visibilityRange = 10;
 var velocityLimit = 0.5;
 function create_boids(num) {
     boidsN = num;
     for (var i = 0; i < num; i++) {
-        var P = new THREE.Vector3().random().subScalar(0.5).multiplyScalar(boundRange * 2);
+        var P = new THREE.Vector3()
+            .random()
+            .subScalar(0.5)
+            .multiplyScalar(boundRange * 2);
         var V = new THREE.Vector3().randomDirection().multiplyScalar((Math.random() * velocityLimit) / 2);
         boidsP.push(P);
         boidsV.push(V);
@@ -198,7 +202,7 @@ function main() {
     return __awaiter(this, void 0, void 0, function () {
         var boid_num;
         return __generator(this, function (_a) {
-            boid_num = 1000;
+            boid_num = 500;
             create_boids(boid_num);
             draw_boids();
             renderer.render(scene, camera);
@@ -207,5 +211,31 @@ function main() {
         });
     });
 }
+(_a = document.getElementById("controller")) === null || _a === void 0 ? void 0 : _a.appendChild(generate_Slider(0, 0, 2 * avoidFactor, avoidFactor, 'avoidFactor'));
+function generate_Slider(id, min, max, init, name) {
+    var ret = document.createElement("div");
+    ret.className = "sliderContainer";
+    var slider = document.createElement("input");
+    slider.setAttribute("type", "range");
+    slider.setAttribute("min", String(min));
+    slider.setAttribute("max", String(max));
+    slider.setAttribute("step", String((max - min) / 1000));
+    slider.setAttribute("value", String(init));
+    slider.className = "slider";
+    slider.id = "Slider" + String(id);
+    var label = document.createElement("label");
+    label.setAttribute("for", slider.id);
+    label.innerHTML = name;
+    var span = document.createElement("span");
+    span.id = "SliderValue" + String(id);
+    span.innerHTML = String(init);
+    ret.replaceChildren(slider, label, span);
+    return ret;
+}
+function slider01_function() {
+    avoidFactor = Number(document.getElementById("Slider0").value);
+    document.getElementById("SliderValue0").innerHTML = String(avoidFactor.toFixed(4));
+}
+document.getElementById("Slider0").oninput = slider01_function;
 main();
 //# sourceMappingURL=index.js.map
