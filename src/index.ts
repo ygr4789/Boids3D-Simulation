@@ -172,7 +172,7 @@ function limit_velocity() {
 function animate() {
   update_boids();
   draw_boids();
-  requestAnimationFrame(animate);
+  // requestAnimationFrame(animate);
   renderer.render(scene, camera);
 }
 
@@ -250,8 +250,7 @@ async function main() {
   create_boids(boid_num);
   draw_boids();
   init_controllers();
-  renderer.render(scene, camera);
-  animate();
+  renderer.setAnimationLoop(animate)
 }
 
 main();
