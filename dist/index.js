@@ -191,7 +191,7 @@ function limit_velocity() {
 function animate() {
     update_boids();
     draw_boids();
-    requestAnimationFrame(animate);
+    // requestAnimationFrame(animate);
     renderer.render(scene, camera);
 }
 function toggle_run() {
@@ -210,6 +210,33 @@ function reset_state() {
         boidsV.push(V);
     }
 }
+var mouseTracker;
+function create_mouse_tracking_ball() {
+    var sphereGeo = new THREE.SphereGeometry(2, 30, 30);
+    var sphereMat = new THREE.MeshStandardMaterial({
+        color: 0xffea00,
+        metalness: 0,
+        roughness: 0,
+    });
+    var sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+    mouseTracker = sphereMesh;
+    scene.add(sphereMesh);
+}
+var mouse = new THREE.Vector2();
+var intersectionPoint = new THREE.Vector3();
+var planeNormal = new THREE.Vector3();
+var plane = new THREE.Plane();
+var raycaster = new THREE.Raycaster();
+window.addEventListener("mousemove", function (e) {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    console.log(mouse.x, mouse.y);
+    planeNormal.copy(camera.position).normalize();
+    plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
+    raycaster.setFromCamera(mouse, camera);
+    raycaster.ray.intersectPlane(plane, intersectionPoint);
+    sphereMesh.position.copy(intersectionPoint);
+});
 function init_controllers() {
     var _a, _b, _c, _d, _e;
     function generate_Slider(id, min, max, init, name) {
@@ -264,8 +291,7 @@ function main() {
             create_boids(boid_num);
             draw_boids();
             init_controllers();
-            renderer.render(scene, camera);
-            animate();
+            renderer.setAnimationLoop(animate);
             return [2 /*return*/];
         });
     });
