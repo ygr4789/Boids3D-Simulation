@@ -212,15 +212,14 @@ function reset_state() {
 }
 var mouseTracker;
 function create_mouse_tracking_ball() {
-    var sphereGeo = new THREE.SphereGeometry(2, 30, 30);
+    var sphereGeo = new THREE.SphereGeometry(1);
     var sphereMat = new THREE.MeshStandardMaterial({
         color: 0xffea00,
-        metalness: 0,
-        roughness: 0,
+        opacity: 1
     });
     var sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
     mouseTracker = sphereMesh;
-    scene.add(sphereMesh);
+    scene.add(mouseTracker);
 }
 var mouse = new THREE.Vector2();
 var intersectionPoint = new THREE.Vector3();
@@ -235,10 +234,10 @@ window.addEventListener("mousemove", function (e) {
     plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
     raycaster.setFromCamera(mouse, camera);
     raycaster.ray.intersectPlane(plane, intersectionPoint);
-    sphereMesh.position.copy(intersectionPoint);
+    mouseTracker.position.copy(intersectionPoint);
 });
 function init_controllers() {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     function generate_Slider(id, min, max, init, name) {
         var ret = document.createElement("div");
         ret.className = "sliderContainer";
@@ -267,17 +266,20 @@ function init_controllers() {
     resetButton.onclick = reset_state;
     resetButton.innerHTML = "reset";
     (_b = document.getElementById("controller")) === null || _b === void 0 ? void 0 : _b.appendChild(resetButton);
-    (_c = document.getElementById("controller")) === null || _c === void 0 ? void 0 : _c.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
+    var trackingButton = document.createElement("input");
+    trackingButton.setAttribute("type", "checkbox");
+    (_c = document.getElementById("controller")) === null || _c === void 0 ? void 0 : _c.appendChild(trackingButton);
+    (_d = document.getElementById("controller")) === null || _d === void 0 ? void 0 : _d.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
     document.getElementById("Slider0").oninput = function () {
         avoidFactor = Number(document.getElementById("Slider0").value);
         document.getElementById("SliderValue0").innerHTML = String(avoidFactor.toFixed(4));
     };
-    (_d = document.getElementById("controller")) === null || _d === void 0 ? void 0 : _d.appendChild(generate_Slider(1, 0, 5 * alignFactor, alignFactor, "alignFactor"));
+    (_e = document.getElementById("controller")) === null || _e === void 0 ? void 0 : _e.appendChild(generate_Slider(1, 0, 5 * alignFactor, alignFactor, "alignFactor"));
     document.getElementById("Slider1").oninput = function () {
         alignFactor = Number(document.getElementById("Slider1").value);
         document.getElementById("SliderValue1").innerHTML = String(alignFactor.toFixed(4));
     };
-    (_e = document.getElementById("controller")) === null || _e === void 0 ? void 0 : _e.appendChild(generate_Slider(2, 0, 5 * cohesionFactor, cohesionFactor, "cohesionFactor"));
+    (_f = document.getElementById("controller")) === null || _f === void 0 ? void 0 : _f.appendChild(generate_Slider(2, 0, 5 * cohesionFactor, cohesionFactor, "cohesionFactor"));
     document.getElementById("Slider2").oninput = function () {
         cohesionFactor = Number(document.getElementById("Slider2").value);
         document.getElementById("SliderValue2").innerHTML = String(cohesionFactor.toFixed(4));
@@ -289,6 +291,7 @@ function main() {
         return __generator(this, function (_a) {
             boid_num = 500;
             create_boids(boid_num);
+            create_mouse_tracking_ball();
             draw_boids();
             init_controllers();
             renderer.setAnimationLoop(animate);

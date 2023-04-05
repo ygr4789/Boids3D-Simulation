@@ -194,25 +194,23 @@ function reset_state() {
   }
 }
 
-const mouseTracker: THREE.Mesh;
+let mouseTracker: THREE.Mesh;
 
 function create_mouse_tracking_ball() {
-  const sphereGeo = new THREE.SphereGeometry(2, 30, 30);
+  const sphereGeo = new THREE.SphereGeometry(1);
   const sphereMat = new THREE.MeshStandardMaterial({
     color: 0xffea00,
-    metalness: 0,
-    roughness: 0,
+    opacity: 1
   });
   const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
   mouseTracker = sphereMesh;
-  scene.add(sphereMesh);
+  scene.add(mouseTracker);
 }
 const mouse = new THREE.Vector2();
 const intersectionPoint = new THREE.Vector3();
 const planeNormal = new THREE.Vector3();
 const plane = new THREE.Plane();
 const raycaster = new THREE.Raycaster();
-
 
 window.addEventListener("mousemove", function (e) {
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -222,7 +220,7 @@ window.addEventListener("mousemove", function (e) {
   plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
   raycaster.setFromCamera(mouse, camera);
   raycaster.ray.intersectPlane(plane, intersectionPoint);
-  sphereMesh.position.copy(intersectionPoint);
+  mouseTracker.position.copy(intersectionPoint);
 });
 
 function init_controllers() {
@@ -258,6 +256,10 @@ function init_controllers() {
   resetButton.onclick = reset_state;
   resetButton.innerHTML = "reset";
   document.getElementById("controller")?.appendChild(resetButton);
+  
+  let trackingButton = document.createElement("input");
+  trackingButton.setAttribute("type", "checkbox");
+  document.getElementById("controller")?.appendChild(trackingButton);
 
   document.getElementById("controller")?.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
   document!.getElementById("Slider0")!.oninput = function () {
@@ -279,6 +281,7 @@ function init_controllers() {
 async function main() {
   const boid_num = 500;
   create_boids(boid_num);
+  create_mouse_tracking_ball();
   draw_boids();
   init_controllers();
   renderer.setAnimationLoop(animate);
