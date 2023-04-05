@@ -34,7 +34,6 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-var _a;
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 var scene = new THREE.Scene();
@@ -90,16 +89,11 @@ var cohesionFactor = 0.01;
 var pushFactor = 0.05;
 var visibilityRange = 10;
 var velocityLimit = 0.5;
+var isPlay = false;
 function create_boids(num) {
     boidsN = num;
+    reset_state();
     for (var i = 0; i < num; i++) {
-        var P = new THREE.Vector3()
-            .random()
-            .subScalar(0.5)
-            .multiplyScalar(boundRange * 2);
-        var V = new THREE.Vector3().randomDirection().multiplyScalar((Math.random() * velocityLimit) / 2);
-        boidsP.push(P);
-        boidsV.push(V);
         var geometry = new THREE.CylinderGeometry(0.0, 0.75, 2.25, 4, 1);
         var material = new THREE.MeshPhongMaterial();
         material.color = new THREE.Color(0x993333);
@@ -120,6 +114,8 @@ function draw_boids() {
     }
 }
 function update_boids() {
+    if (!isPlay)
+        return;
     for (var i = 0; i < boidsN; i++) {
         var vel1 = rule1(i);
         var vel2 = rule2(i);
@@ -198,6 +194,68 @@ function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
 }
+function toggle_run() {
+    isPlay = !isPlay;
+}
+function reset_state() {
+    boidsP = [];
+    boidsV = [];
+    for (var i = 0; i < boidsN; i++) {
+        var P = new THREE.Vector3()
+            .random()
+            .subScalar(0.5)
+            .multiplyScalar(boundRange * 2);
+        var V = new THREE.Vector3().randomDirection().multiplyScalar((Math.random() * velocityLimit) / 2);
+        boidsP.push(P);
+        boidsV.push(V);
+    }
+}
+function init_controllers() {
+    var _a, _b, _c, _d, _e;
+    function generate_Slider(id, min, max, init, name) {
+        var ret = document.createElement("div");
+        ret.className = "sliderContainer";
+        var slider = document.createElement("input");
+        slider.setAttribute("type", "range");
+        slider.setAttribute("min", String(min));
+        slider.setAttribute("max", String(max));
+        slider.setAttribute("step", String((max - min) / 1000));
+        slider.setAttribute("value", String(init));
+        slider.className = "slider";
+        slider.id = "Slider" + String(id);
+        var label = document.createElement("label");
+        label.setAttribute("for", slider.id);
+        label.innerHTML = name;
+        var span = document.createElement("span");
+        span.id = "SliderValue" + String(id);
+        span.innerHTML = String(init);
+        ret.replaceChildren(slider, label, span);
+        return ret;
+    }
+    var runButton = document.createElement("button");
+    runButton.onclick = toggle_run;
+    runButton.innerHTML = "run/pause";
+    (_a = document.getElementById("controller")) === null || _a === void 0 ? void 0 : _a.appendChild(runButton);
+    var resetButton = document.createElement("button");
+    resetButton.onclick = reset_state;
+    resetButton.innerHTML = "reset";
+    (_b = document.getElementById("controller")) === null || _b === void 0 ? void 0 : _b.appendChild(resetButton);
+    (_c = document.getElementById("controller")) === null || _c === void 0 ? void 0 : _c.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
+    document.getElementById("Slider0").oninput = function () {
+        avoidFactor = Number(document.getElementById("Slider0").value);
+        document.getElementById("SliderValue0").innerHTML = String(avoidFactor.toFixed(4));
+    };
+    (_d = document.getElementById("controller")) === null || _d === void 0 ? void 0 : _d.appendChild(generate_Slider(1, 0, 5 * alignFactor, alignFactor, "alignFactor"));
+    document.getElementById("Slider1").oninput = function () {
+        alignFactor = Number(document.getElementById("Slider1").value);
+        document.getElementById("SliderValue1").innerHTML = String(alignFactor.toFixed(4));
+    };
+    (_e = document.getElementById("controller")) === null || _e === void 0 ? void 0 : _e.appendChild(generate_Slider(2, 0, 5 * cohesionFactor, cohesionFactor, "cohesionFactor"));
+    document.getElementById("Slider2").oninput = function () {
+        cohesionFactor = Number(document.getElementById("Slider2").value);
+        document.getElementById("SliderValue2").innerHTML = String(cohesionFactor.toFixed(4));
+    };
+}
 function main() {
     return __awaiter(this, void 0, void 0, function () {
         var boid_num;
@@ -205,37 +263,12 @@ function main() {
             boid_num = 500;
             create_boids(boid_num);
             draw_boids();
+            init_controllers();
             renderer.render(scene, camera);
             animate();
             return [2 /*return*/];
         });
     });
 }
-(_a = document.getElementById("controller")) === null || _a === void 0 ? void 0 : _a.appendChild(generate_Slider(0, 0, 2 * avoidFactor, avoidFactor, 'avoidFactor'));
-function generate_Slider(id, min, max, init, name) {
-    var ret = document.createElement("div");
-    ret.className = "sliderContainer";
-    var slider = document.createElement("input");
-    slider.setAttribute("type", "range");
-    slider.setAttribute("min", String(min));
-    slider.setAttribute("max", String(max));
-    slider.setAttribute("step", String((max - min) / 1000));
-    slider.setAttribute("value", String(init));
-    slider.className = "slider";
-    slider.id = "Slider" + String(id);
-    var label = document.createElement("label");
-    label.setAttribute("for", slider.id);
-    label.innerHTML = name;
-    var span = document.createElement("span");
-    span.id = "SliderValue" + String(id);
-    span.innerHTML = String(init);
-    ret.replaceChildren(slider, label, span);
-    return ret;
-}
-function slider01_function() {
-    avoidFactor = Number(document.getElementById("Slider0").value);
-    document.getElementById("SliderValue0").innerHTML = String(avoidFactor.toFixed(4));
-}
-document.getElementById("Slider0").oninput = slider01_function;
 main();
 //# sourceMappingURL=index.js.map

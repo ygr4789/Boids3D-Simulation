@@ -74,18 +74,13 @@ let pushFactor = 0.05;
 let visibilityRange = 10;
 let velocityLimit = 0.5;
 
+let isPlay = false;
+
 function create_boids(num: number) {
   boidsN = num;
+  reset_state();
 
   for (let i = 0; i < num; i++) {
-    let P = new THREE.Vector3()
-      .random()
-      .subScalar(0.5)
-      .multiplyScalar(boundRange * 2);
-    let V = new THREE.Vector3().randomDirection().multiplyScalar((Math.random() * velocityLimit) / 2);
-    boidsP.push(P);
-    boidsV.push(V);
-
     const geometry = new THREE.CylinderGeometry(0.0, 0.75, 2.25, 4, 1);
     const material = new THREE.MeshPhongMaterial();
     material.color = new THREE.Color(0x993333);
@@ -109,6 +104,7 @@ function draw_boids() {
 }
 
 function update_boids() {
+  if (!isPlay) return;
   for (let i = 0; i < boidsN; i++) {
     let vel1 = rule1(i);
     let vel2 = rule2(i);
@@ -180,44 +176,82 @@ function animate() {
   renderer.render(scene, camera);
 }
 
+function toggle_run() {
+  isPlay = !isPlay;
+}
+
+function reset_state() {
+  boidsP = [];
+  boidsV = [];
+  for (let i = 0; i < boidsN; i++) {
+    let P = new THREE.Vector3()
+      .random()
+      .subScalar(0.5)
+      .multiplyScalar(boundRange * 2);
+    let V = new THREE.Vector3().randomDirection().multiplyScalar((Math.random() * velocityLimit) / 2);
+    boidsP.push(P);
+    boidsV.push(V);
+  }
+}
+
+function init_controllers() {
+  function generate_Slider(id: number, min: number, max: number, init: number, name: string) {
+    let ret = document.createElement("div");
+    ret.className = "sliderContainer";
+
+    let slider = document.createElement("input");
+    slider.setAttribute("type", "range");
+    slider.setAttribute("min", String(min));
+    slider.setAttribute("max", String(max));
+    slider.setAttribute("step", String((max - min) / 1000));
+    slider.setAttribute("value", String(init));
+    slider.className = "slider";
+    slider.id = "Slider" + String(id);
+
+    let label = document.createElement("label");
+    label.setAttribute("for", slider.id);
+    label.innerHTML = name;
+    let span = document.createElement("span");
+    span.id = "SliderValue" + String(id);
+    span.innerHTML = String(init);
+
+    ret.replaceChildren(slider, label, span);
+    return ret;
+  }
+  
+  let runButton = document.createElement("button");
+  runButton.onclick = toggle_run;
+  runButton.innerHTML = "run/pause";
+  document.getElementById("controller")?.appendChild(runButton);
+  let resetButton = document.createElement("button");
+  resetButton.onclick = reset_state;
+  resetButton.innerHTML = "reset";
+  document.getElementById("controller")?.appendChild(resetButton);
+
+  document.getElementById("controller")?.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
+  document!.getElementById("Slider0")!.oninput = function () {
+    avoidFactor = Number(document!.getElementById("Slider0")!.value);
+    document!.getElementById("SliderValue0")!.innerHTML = String(avoidFactor.toFixed(4));
+  };
+  document.getElementById("controller")?.appendChild(generate_Slider(1, 0, 5 * alignFactor, alignFactor, "alignFactor"));
+  document!.getElementById("Slider1")!.oninput = function () {
+    alignFactor = Number(document!.getElementById("Slider1")!.value);
+    document!.getElementById("SliderValue1")!.innerHTML = String(alignFactor.toFixed(4));
+  };
+  document.getElementById("controller")?.appendChild(generate_Slider(2, 0, 5 * cohesionFactor, cohesionFactor, "cohesionFactor"));
+  document!.getElementById("Slider2")!.oninput = function () {
+    cohesionFactor = Number(document!.getElementById("Slider2")!.value);
+    document!.getElementById("SliderValue2")!.innerHTML = String(cohesionFactor.toFixed(4));
+  };
+}
+
 async function main() {
   const boid_num = 500;
   create_boids(boid_num);
   draw_boids();
+  init_controllers();
   renderer.render(scene, camera);
   animate();
 }
-
-
-function generate_Slider(id: number, min: number, max: number, init: number, name: string) {
-  let ret = document.createElement("div");
-  ret.className = "sliderContainer";
-
-  let slider = document.createElement("input");
-  slider.setAttribute("type", "range");
-  slider.setAttribute("min", String(min));
-  slider.setAttribute("max", String(max));
-  slider.setAttribute("step", String((max - min) / 1000));
-  slider.setAttribute("value", String(init));
-  slider.className = "slider";
-  slider.id = "Slider" + String(id);
-
-  let label = document.createElement("label");
-  label.setAttribute("for", slider.id);
-  label.innerHTML = name;
-  let span = document.createElement("span");
-  span.id = "SliderValue" + String(id);
-  span.innerHTML = String(init);
-
-  ret.replaceChildren(slider, label, span);
-  return ret;
-}
-
-document.getElementById("controller")?.appendChild(generate_Slider(0, 0, 2 * avoidFactor, avoidFactor, 'avoidFactor'));
-
-document!.getElementById("Slider0")!.oninput = function() {
-  avoidFactor = Number(document!.getElementById("Slider0")!.value);
-  document!.getElementById("SliderValue0")!.innerHTML = String(avoidFactor.toFixed(4));
-};
 
 main();
