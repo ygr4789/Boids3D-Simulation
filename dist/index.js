@@ -91,6 +91,7 @@ var seekingFactor = 0.05;
 var visibilityRange = 10;
 var velocityLimit = 0.5;
 var isPlay = false;
+var isSeeking = false;
 function create_boids(num) {
     boidsN = num;
     reset_state();
@@ -122,7 +123,9 @@ function update_boids() {
         var vel2 = rule2(i);
         var vel3 = rule3(i);
         var vel4 = rule4(i);
-        boidsV[i].add(vel1).add(vel2).add(vel3).add(vel4);
+        boidsV[i].add(vel1).add(vel2).add(vel3);
+        if (isSeeking)
+            boidsV[i].add(vel4);
         boidsP[i].add(boidsV[i]);
     }
     handle_boundary();
@@ -240,6 +243,7 @@ window.addEventListener("mousemove", function (e) {
     plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
     raycaster.setFromCamera(mouse, camera);
     raycaster.ray.intersectPlane(plane, intersectionPoint);
+    mouseTracker.visible = isSeeking;
     mouseTracker.position.copy(intersectionPoint);
 });
 function init_controllers() {
@@ -274,7 +278,11 @@ function init_controllers() {
     (_b = document.getElementById("controller")) === null || _b === void 0 ? void 0 : _b.appendChild(resetButton);
     var trackingButton = document.createElement("input");
     trackingButton.setAttribute("type", "checkbox");
+    trackingButton.id = "seekingController";
     (_c = document.getElementById("controller")) === null || _c === void 0 ? void 0 : _c.appendChild(trackingButton);
+    document.getElementById("seekingController").oninput = function () {
+        isSeeking = document.getElementById("seekingController").checked;
+    };
     (_d = document.getElementById("controller")) === null || _d === void 0 ? void 0 : _d.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
     document.getElementById("Slider0").oninput = function () {
         avoidFactor = Number(document.getElementById("Slider0").value);

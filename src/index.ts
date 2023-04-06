@@ -76,6 +76,7 @@ let visibilityRange = 10;
 let velocityLimit = 0.5;
 
 let isPlay = false;
+let isSeeking = false;
 
 function create_boids(num: number) {
   boidsN = num;
@@ -111,14 +112,15 @@ function update_boids() {
     let vel2 = rule2(i);
     let vel3 = rule3(i);
     let vel4 = rule4(i);
-    boidsV[i].add(vel1).add(vel2).add(vel3).add(vel4);
+    boidsV[i].add(vel1).add(vel2).add(vel3);
+    if(isSeeking) boidsV[i].add(vel4);
     boidsP[i].add(boidsV[i]);
   }
   handle_boundary();
   limit_velocity();
 }
 
-function rule1(i: number): THREE.Vector3 {
+function rule1(i: number): THREE.Vector3 { // Seperation
   let ret = new THREE.Vector3();
   for (let P of boidsP) {
     let D = new THREE.Vector3().subVectors(boidsP[i], P);
@@ -126,7 +128,7 @@ function rule1(i: number): THREE.Vector3 {
   }
   return ret.multiplyScalar(avoidFactor);
 }
-function rule2(i: number): THREE.Vector3 {
+function rule2(i: number): THREE.Vector3 { // Alignment
   let ret = new THREE.Vector3();
   let neighbors = find_neighbors(i);
   if (neighbors.length == 0) return ret;
@@ -136,7 +138,7 @@ function rule2(i: number): THREE.Vector3 {
   ret.divideScalar(neighbors.length);
   return ret.multiplyScalar(alignFactor);
 }
-function rule3(i: number): THREE.Vector3 {
+function rule3(i: number): THREE.Vector3 { // Cohesion
   let ret = new THREE.Vector3();
   let neighbors = find_neighbors(i);
   if (neighbors.length == 0) return ret;
@@ -146,7 +148,7 @@ function rule3(i: number): THREE.Vector3 {
   ret.divideScalar(neighbors.length);
   return ret.multiplyScalar(cohesionFactor);
 }
-function rule4(i: number): THREE.Vector3 {
+function rule4(i: number): THREE.Vector3 { // Goal Seeking
   let dir = new THREE.Vector3().subVectors(intersectionPoint, boidsP[i]).normalize();
   let ret = new THREE.Vector3().subVectors(dir.multiplyScalar(velocityLimit), boidsV[i]);
   return ret.multiplyScalar(seekingFactor);
@@ -226,6 +228,7 @@ window.addEventListener("mousemove", function (e) {
   plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
   raycaster.setFromCamera(mouse, camera);
   raycaster.ray.intersectPlane(plane, intersectionPoint);
+  mouseTracker.visible = isSeeking;
   mouseTracker.position.copy(intersectionPoint);
 });
 
@@ -265,7 +268,11 @@ function init_controllers() {
   
   let trackingButton = document.createElement("input");
   trackingButton.setAttribute("type", "checkbox");
+  trackingButton.id = "seekingController"
   document.getElementById("controller")?.appendChild(trackingButton);
+  document!.getElementById("seekingController")!.oninput = function () {
+    isSeeking = document!.getElementById("seekingController")!.checked;
+  };
 
   document.getElementById("controller")?.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
   document!.getElementById("Slider0")!.oninput = function () {
