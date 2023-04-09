@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import * as KD_TREE from "kd-tree-javascript";
 
 const scene = new THREE.Scene();
 const setcolor = "#bbbbbb";
@@ -65,6 +66,8 @@ let boidsV: Array<THREE.Vector3> = [];
 let boidsN: number;
 let boidsShapes: Array<THREE.Mesh> = [];
 
+let boidsTree: KD_TREE.kdTree<THREE.Vector3>;
+
 let protectedRange = 3;
 let avoidFactor = 0.01;
 let alignFactor = 0.1;
@@ -80,7 +83,7 @@ let isSeeking = false;
 
 function create_boids(num: number) {
   boidsN = num;
-  reset_state();
+  init_state();
 
   for (let i = 0; i < num; i++) {
     const geometry = new THREE.CylinderGeometry(0.0, 0.75, 2.25, 4, 1);
@@ -113,14 +116,15 @@ function update_boids() {
     let vel3 = rule3(i);
     let vel4 = rule4(i);
     boidsV[i].add(vel1).add(vel2).add(vel3);
-    if(isSeeking) boidsV[i].add(vel4);
+    if (isSeeking) boidsV[i].add(vel4);
     boidsP[i].add(boidsV[i]);
   }
   handle_boundary();
   limit_velocity();
 }
 
-function rule1(i: number): THREE.Vector3 { // Seperation
+function rule1(i: number): THREE.Vector3 {
+  // Seperation
   let ret = new THREE.Vector3();
   for (let P of boidsP) {
     let D = new THREE.Vector3().subVectors(boidsP[i], P);
@@ -128,27 +132,31 @@ function rule1(i: number): THREE.Vector3 { // Seperation
   }
   return ret.multiplyScalar(avoidFactor);
 }
-function rule2(i: number): THREE.Vector3 { // Alignment
+function rule2(i: number): THREE.Vector3 {
+  // Alignment
   let ret = new THREE.Vector3();
   let neighbors = find_neighbors(i);
-  if (neighbors.length == 0) return ret;
+  if (neighbors.length === 0) return ret;
   for (let j of neighbors) {
     ret.add(new THREE.Vector3().subVectors(boidsV[j], boidsV[i]));
   }
   ret.divideScalar(neighbors.length);
   return ret.multiplyScalar(alignFactor);
 }
-function rule3(i: number): THREE.Vector3 { // Cohesion
+function rule3(i: number): THREE.Vector3 {
+  // Cohesion
   let ret = new THREE.Vector3();
-  let neighbors = find_neighbors(i);
-  if (neighbors.length == 0) return ret;
-  for (let j of neighbors) {
-    ret.add(new THREE.Vector3().subVectors(boidsP[j], boidsP[i]));
+  let neighborsP = boidsTree.nearest(boidsP[i], 5, visibilityRange);
+  if(neighborsP.length === 0) return ret;
+  for (let [P,dist] of neighborsP) {
+    if(dist === 0) continue;
+    ret.add(new THREE.Vector3().subVectors(P, boidsP[i]));
   }
-  ret.divideScalar(neighbors.length);
+  ret.divideScalar(neighborsP.length);
   return ret.multiplyScalar(cohesionFactor);
 }
-function rule4(i: number): THREE.Vector3 { // Goal Seeking
+function rule4(i: number): THREE.Vector3 {
+  // Goal Seeking
   let dir = new THREE.Vector3().subVectors(intersectionPoint, boidsP[i]).normalize();
   let ret = new THREE.Vector3().subVectors(dir.multiplyScalar(velocityLimit), boidsV[i]);
   return ret.multiplyScalar(seekingFactor);
@@ -157,7 +165,7 @@ function rule4(i: number): THREE.Vector3 { // Goal Seeking
 function find_neighbors(i: number): Array<number> {
   let ret = [];
   for (let j = 0; j < boidsN; j++) {
-    if (i == j) continue;
+    if (i === j) continue;
     if (boidsP[i].distanceTo(boidsP[j]) < visibilityRange) ret.push(j);
   }
   return ret;
@@ -189,7 +197,7 @@ function toggle_run() {
   isPlay = !isPlay;
 }
 
-function reset_state() {
+function init_state() {
   boidsP = [];
   boidsV = [];
   for (let i = 0; i < boidsN; i++) {
@@ -201,6 +209,15 @@ function reset_state() {
     boidsP.push(P);
     boidsV.push(V);
   }
+  boidsTree = new KD_TREE.kdTree(
+    boidsP,
+    function (a: THREE.Vector3, b: THREE.Vector3): number {
+      // return a.distanceTo(b);
+      return Math.sqrt(Math.pow(a.x - b.x, 2) +  Math.pow(a.y - b.y, 2) + Math.pow(a.z - b.z, 2));
+      // return Math.pow(a.x - b.x, 2) +  Math.pow(a.y - b.y, 2);
+    },
+    ["x", "y", "z"]
+  );
 }
 
 let mouseTracker: THREE.Mesh;
@@ -209,7 +226,7 @@ function create_mouse_tracking_ball() {
   const sphereGeo = new THREE.SphereGeometry(1);
   const sphereMat = new THREE.MeshStandardMaterial({
     color: 0xffea00,
-    opacity: 1
+    opacity: 1,
   });
   const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
   mouseTracker = sphereMesh;
@@ -262,31 +279,31 @@ function init_controllers() {
   runButton.innerHTML = "run/pause";
   document.getElementById("controller")?.appendChild(runButton);
   let resetButton = document.createElement("button");
-  resetButton.onclick = reset_state;
+  resetButton.onclick = init_state;
   resetButton.innerHTML = "reset";
   document.getElementById("controller")?.appendChild(resetButton);
-  
+
   let trackingButton = document.createElement("input");
   trackingButton.setAttribute("type", "checkbox");
-  trackingButton.id = "seekingController"
+  trackingButton.id = "seekingController";
   document.getElementById("controller")?.appendChild(trackingButton);
   document!.getElementById("seekingController")!.oninput = function () {
-    isSeeking = document!.getElementById("seekingController")!.checked;
+    // isSeeking = document!.getElementById("seekingController")!.checked;
   };
 
   document.getElementById("controller")?.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
   document!.getElementById("Slider0")!.oninput = function () {
-    avoidFactor = Number(document!.getElementById("Slider0")!.value);
+    // avoidFactor = Number(document!.getElementById("Slider0")!.value);
     document!.getElementById("SliderValue0")!.innerHTML = String(avoidFactor.toFixed(4));
   };
   document.getElementById("controller")?.appendChild(generate_Slider(1, 0, 5 * alignFactor, alignFactor, "alignFactor"));
   document!.getElementById("Slider1")!.oninput = function () {
-    alignFactor = Number(document!.getElementById("Slider1")!.value);
+    // alignFactor = Number(document!.getElementById("Slider1")!.value);
     document!.getElementById("SliderValue1")!.innerHTML = String(alignFactor.toFixed(4));
   };
   document.getElementById("controller")?.appendChild(generate_Slider(2, 0, 5 * cohesionFactor, cohesionFactor, "cohesionFactor"));
   document!.getElementById("Slider2")!.oninput = function () {
-    cohesionFactor = Number(document!.getElementById("Slider2")!.value);
+    // cohesionFactor = Number(document!.getElementById("Slider2")!.value);
     document!.getElementById("SliderValue2")!.innerHTML = String(cohesionFactor.toFixed(4));
   };
 }
