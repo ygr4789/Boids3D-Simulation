@@ -75,6 +75,8 @@ let cohesionFactor = 0.01;
 let pushFactor = 0.05;
 let seekingFactor = 0.05;
 
+let nearestCount = 5;
+
 let visibilityRange = 10;
 let velocityLimit = 0.5;
 
@@ -117,7 +119,9 @@ function update_boids() {
     let vel4 = rule4(i);
     boidsV[i].add(vel1).add(vel2).add(vel3);
     if (isSeeking) boidsV[i].add(vel4);
+    boidsTree.remove(boidsP[i]);
     boidsP[i].add(boidsV[i]);
+    boidsTree.insert(boidsP[i]);
   }
   handle_boundary();
   limit_velocity();
@@ -126,10 +130,11 @@ function update_boids() {
 function rule1(i: number): THREE.Vector3 {
   // Seperation
   let ret = new THREE.Vector3();
-  for (let P of boidsP) {
-    let D = new THREE.Vector3().subVectors(boidsP[i], P);
-    if (D.length() < protectedRange) ret.add(D);
+  let neighbors = boidsTree.nearest(boidsP[i], nearestCount + 1, protectedRange);
+  for (let [P] of neighbors) {
+    ret.add(new THREE.Vector3().subVectors(boidsP[i], P));
   }
+
   return ret.multiplyScalar(avoidFactor);
 }
 function rule2(i: number): THREE.Vector3 {
@@ -146,13 +151,12 @@ function rule2(i: number): THREE.Vector3 {
 function rule3(i: number): THREE.Vector3 {
   // Cohesion
   let ret = new THREE.Vector3();
-  let neighborsP = boidsTree.nearest(boidsP[i], 5, visibilityRange);
-  if(neighborsP.length === 0) return ret;
-  for (let [P,dist] of neighborsP) {
-    if(dist === 0) continue;
+  let neighbors = boidsTree.nearest(boidsP[i], nearestCount + 1, visibilityRange);
+  if (neighbors.length <= 1) return ret;
+  for (let [P] of neighbors) {
     ret.add(new THREE.Vector3().subVectors(P, boidsP[i]));
   }
-  ret.divideScalar(neighborsP.length);
+  ret.divideScalar(neighbors.length - 1);
   return ret.multiplyScalar(cohesionFactor);
 }
 function rule4(i: number): THREE.Vector3 {
@@ -213,8 +217,7 @@ function init_state() {
     boidsP,
     function (a: THREE.Vector3, b: THREE.Vector3): number {
       // return a.distanceTo(b);
-      return Math.sqrt(Math.pow(a.x - b.x, 2) +  Math.pow(a.y - b.y, 2) + Math.pow(a.z - b.z, 2));
-      // return Math.pow(a.x - b.x, 2) +  Math.pow(a.y - b.y, 2);
+      return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2) + Math.pow(a.z - b.z, 2));
     },
     ["x", "y", "z"]
   );
@@ -288,28 +291,28 @@ function init_controllers() {
   trackingButton.id = "seekingController";
   document.getElementById("controller")?.appendChild(trackingButton);
   document!.getElementById("seekingController")!.oninput = function () {
-    // isSeeking = document!.getElementById("seekingController")!.checked;
+    isSeeking = (document!.getElementById("seekingController")! as HTMLInputElement).checked;
   };
 
   document.getElementById("controller")?.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
   document!.getElementById("Slider0")!.oninput = function () {
-    // avoidFactor = Number(document!.getElementById("Slider0")!.value);
+    avoidFactor = Number((document!.getElementById("Slider0")! as HTMLInputElement).value);
     document!.getElementById("SliderValue0")!.innerHTML = String(avoidFactor.toFixed(4));
   };
   document.getElementById("controller")?.appendChild(generate_Slider(1, 0, 5 * alignFactor, alignFactor, "alignFactor"));
   document!.getElementById("Slider1")!.oninput = function () {
-    // alignFactor = Number(document!.getElementById("Slider1")!.value);
+    alignFactor = Number((document!.getElementById("Slider1")! as HTMLInputElement).value);
     document!.getElementById("SliderValue1")!.innerHTML = String(alignFactor.toFixed(4));
   };
   document.getElementById("controller")?.appendChild(generate_Slider(2, 0, 5 * cohesionFactor, cohesionFactor, "cohesionFactor"));
   document!.getElementById("Slider2")!.oninput = function () {
-    // cohesionFactor = Number(document!.getElementById("Slider2")!.value);
+    cohesionFactor = Number((document!.getElementById("Slider2")! as HTMLInputElement).value);
     document!.getElementById("SliderValue2")!.innerHTML = String(cohesionFactor.toFixed(4));
   };
 }
 
 async function main() {
-  const boid_num = 500;
+  const boid_num = 100;
   create_boids(boid_num);
   create_mouse_tracking_ball();
   draw_boids();
