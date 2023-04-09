@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as KD_TREE from "kd-tree-javascript";
+import { kdTree } from "kd-tree-javascript";
 
 const scene = new THREE.Scene();
 const setcolor = "#bbbbbb";
@@ -66,7 +67,7 @@ let boidsV: Array<THREE.Vector3> = [];
 let boidsN: number;
 let boidsShapes: Array<THREE.Mesh> = [];
 
-let boidsTree: KD_TREE.kdTree<THREE.Vector3>;
+let boidsTree: KD_TREE.kdTree<kdTreeNode>;
 
 let protectedRange = 3;
 let avoidFactor = 0.01;
@@ -83,6 +84,23 @@ let velocityLimit = 0.5;
 let isPlay = false;
 let isSeeking = false;
 
+//
+
+class kdTreeNode {
+  constructor(P: THREE.Vector3, id:number) {
+    this.x = P.x;
+    this.y = P.y;
+    this.z = P.z;
+    this.id = id;
+  }
+  x: number
+  y: number
+  z: number
+  id: number
+}
+
+//
+
 function create_boids(num: number) {
   boidsN = num;
   init_state();
@@ -96,6 +114,11 @@ function create_boids(num: number) {
     boidsShapes.push(boidShape);
     scene.add(boidShape);
   }
+  
+  let tmpV = new THREE.Vector3();
+  let tmp1 = new kdTreeNode(tmpV, 1);
+  let tmp2 = new kdTreeNode(tmpV, 2);
+  console.log(tmp1 == tmp2);
 }
 
 function draw_boids() {
@@ -119,9 +142,9 @@ function update_boids() {
     let vel4 = rule4(i);
     boidsV[i].add(vel1).add(vel2).add(vel3);
     if (isSeeking) boidsV[i].add(vel4);
-    boidsTree.remove(boidsP[i]);
+    boidsTree.remove(new kdTreeNode(boidsP[i], i));
     boidsP[i].add(boidsV[i]);
-    boidsTree.insert(boidsP[i]);
+    boidsTree.insert(new kdTreeNode(boidsP[i], i));
   }
   handle_boundary();
   limit_velocity();
@@ -130,9 +153,9 @@ function update_boids() {
 function rule1(i: number): THREE.Vector3 {
   // Seperation
   let ret = new THREE.Vector3();
-  let neighbors = boidsTree.nearest(boidsP[i], nearestCount + 1, protectedRange);
-  for (let [P] of neighbors) {
-    ret.add(new THREE.Vector3().subVectors(boidsP[i], P));
+  let neighbors = boidsTree.nearest(new kdTreeNode(boidsP[i], i), nearestCount + 1, protectedRange);
+  for (let [node] of neighbors) {
+    ret.add(new THREE.Vector3().subVectors(boidsP[i], boidsP[node.id]));
   }
 
   return ret.multiplyScalar(avoidFactor);
@@ -151,10 +174,10 @@ function rule2(i: number): THREE.Vector3 {
 function rule3(i: number): THREE.Vector3 {
   // Cohesion
   let ret = new THREE.Vector3();
-  let neighbors = boidsTree.nearest(boidsP[i], nearestCount + 1, visibilityRange);
+  let neighbors = boidsTree.nearest(new kdTreeNode(boidsP[i], i), nearestCount + 1, visibilityRange);
   if (neighbors.length <= 1) return ret;
-  for (let [P] of neighbors) {
-    ret.add(new THREE.Vector3().subVectors(P, boidsP[i]));
+  for (let [node] of neighbors) {
+    ret.add(new THREE.Vector3().subVectors(boidsP[node.id], boidsP[i]));
   }
   ret.divideScalar(neighbors.length - 1);
   return ret.multiplyScalar(cohesionFactor);
@@ -204,6 +227,7 @@ function toggle_run() {
 function init_state() {
   boidsP = [];
   boidsV = [];
+  let nodeList: Array<kdTreeNode> = [];
   for (let i = 0; i < boidsN; i++) {
     let P = new THREE.Vector3()
       .random()
@@ -212,11 +236,11 @@ function init_state() {
     let V = new THREE.Vector3().randomDirection().multiplyScalar((Math.random() * velocityLimit) / 2);
     boidsP.push(P);
     boidsV.push(V);
+    nodeList.push(new kdTreeNode(boidsP[i], i))
   }
   boidsTree = new KD_TREE.kdTree(
-    boidsP,
-    function (a: THREE.Vector3, b: THREE.Vector3): number {
-      // return a.distanceTo(b);
+    nodeList,
+    function (a: kdTreeNode, b: kdTreeNode): number {
       return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2) + Math.pow(a.z - b.z, 2));
     },
     ["x", "y", "z"]
