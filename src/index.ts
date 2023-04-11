@@ -25,7 +25,6 @@ function window_onsize() {
 }
 
 window.onresize = window_onsize;
-// scene.pause = true
 
 // ================ Light setting ====================
 
@@ -78,8 +77,9 @@ let nearestCount = 10;
 let visibilityRange = 10;
 let velocityLimit = 0.5;
 
-let isPlay = true;
+let isPlay = false;
 let isSeeking = false;
+let obstacleAvailable = false;
 
 //
 
@@ -182,7 +182,6 @@ function rule1(i: number): THREE.Vector3 {
   // Seperation
   let ret = new THREE.Vector3();
   let neighbors = boidsTree.nearest(i, nearestCount + 1, protectedRange);
-  // let neighbors = find_neighbors(i);
   for (let j of neighbors) {
     ret.add(new THREE.Vector3().subVectors(boidsP[i], boidsP[j]));
   }
@@ -193,7 +192,6 @@ function rule2(i: number): THREE.Vector3 {
   // Alignment
   let ret = new THREE.Vector3();
   let neighbors = boidsTree.nearest(i, nearestCount + 1, visibilityRange);
-  // let neighbors = find_neighbors(i);
   if (neighbors.length <= 1) return ret;
   for (let j of neighbors) {
     ret.add(new THREE.Vector3().subVectors(boidsV[j], boidsV[i]));
@@ -205,7 +203,6 @@ function rule3(i: number): THREE.Vector3 {
   // Cohesion
   let ret = new THREE.Vector3();
   let neighbors = boidsTree.nearest(i, nearestCount + 1, visibilityRange);
-  // let neighbors = find_neighbors(i);
   if (neighbors.length <= 1) return ret;
   for (let j of neighbors) {
     ret.add(new THREE.Vector3().subVectors(boidsP[j], boidsP[i]));
@@ -220,17 +217,8 @@ function rule4(i: number): THREE.Vector3 {
   return ret.multiplyScalar(seekingFactor);
 }
 function rule5(i: number): THREE.Vector3 {
-  // let dir = 
+  // Obstacle
   return new THREE.Vector3()
-}
-
-function find_neighbors(i: number): Array<number> {
-  let ret = [];
-  for (let j = 0; j < boidsN; j++) {
-    if (i === j) continue;
-    if (boidsP[i].distanceTo(boidsP[j]) < visibilityRange) ret.push(j);
-  }
-  return ret;
 }
 
 function handle_boundary() {
@@ -251,7 +239,6 @@ function limit_velocity() {
 function animate() {
   update_boids();
   draw_boids();
-  // requestAnimationFrame(animate);
   renderer.render(scene, camera);
 }
 
@@ -316,6 +303,7 @@ function create_obstacle_box() {
   });
   const boxMesh = new THREE.Mesh(boxGeo, boxMat);
   obstacle = boxMesh;
+  obstacle.visible = obstacleAvailable;
   scene.add(obstacle);
 }
 
@@ -421,7 +409,7 @@ async function main() {
   const boid_num = 500;
   create_boids(boid_num);
   create_mouse_tracking_ball();
-  // create_obstacle_box();
+  create_obstacle_box();
   draw_boids();
   init_controllers();
   renderer.setAnimationLoop(animate);
