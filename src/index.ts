@@ -42,7 +42,7 @@ scene.add(lightBack);
 
 // # ===========Creating Bound Box ============
 
-const boundRange = 50;
+const boundRange = 25;
 
 const bound_material = new THREE.MeshStandardMaterial();
 bound_material.color = new THREE.Color(0x444488);
@@ -100,6 +100,7 @@ let boidsTree: {
   arr: [],
   tree: null,
   init() {
+    this.arr = [];
     for (let i = 0; i < boidsN; i++) {
       this.arr.push(this.nodeOf(i));
     }
