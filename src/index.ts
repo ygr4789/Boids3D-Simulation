@@ -78,7 +78,7 @@ let nearestCount = 10;
 let visibilityRange = 10;
 let velocityLimit = 0.5;
 
-let isPlay = false;
+let isPlay = true;
 let isSeeking = false;
 
 //
@@ -204,7 +204,7 @@ function rule2(i: number): THREE.Vector3 {
 function rule3(i: number): THREE.Vector3 {
   // Cohesion
   let ret = new THREE.Vector3();
-  let neighbors = boidsTree.nearest( i, nearestCount + 1, visibilityRange);
+  let neighbors = boidsTree.nearest(i, nearestCount + 1, visibilityRange);
   // let neighbors = find_neighbors(i);
   if (neighbors.length <= 1) return ret;
   for (let j of neighbors) {
@@ -218,6 +218,10 @@ function rule4(i: number): THREE.Vector3 {
   let dir = new THREE.Vector3().subVectors(intersectionPoint, boidsP[i]).normalize();
   let ret = new THREE.Vector3().subVectors(dir.multiplyScalar(velocityLimit), boidsV[i]);
   return ret.multiplyScalar(seekingFactor);
+}
+function rule5(i: number): THREE.Vector3 {
+  // let dir = 
+  return new THREE.Vector3()
 }
 
 function find_neighbors(i: number): Array<number> {
@@ -260,15 +264,17 @@ function init_state() {
   boidsV = [];
   for (let i = 0; i < boidsN; i++) {
     let P = new THREE.Vector3()
-    .random()
-    .subScalar(0.5)
-    .multiplyScalar(boundRange * 2);
+      .random()
+      .subScalar(0.5)
+      .multiplyScalar(boundRange * 2);
     let V = new THREE.Vector3().randomDirection().multiplyScalar((Math.random() * velocityLimit) / 2);
     boidsP.push(P);
     boidsV.push(V);
   }
-  boidsTree.init()
+  boidsTree.init();
 }
+
+//
 
 let mouseTracker: THREE.Mesh;
 
@@ -276,10 +282,11 @@ function create_mouse_tracking_ball() {
   const sphereGeo = new THREE.SphereGeometry(1);
   const sphereMat = new THREE.MeshStandardMaterial({
     color: 0xffea00,
-    opacity: 1,
+    // opacity: 1,
   });
   const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
   mouseTracker = sphereMesh;
+  mouseTracker.visible = isSeeking;
   scene.add(mouseTracker);
 }
 const mouse = new THREE.Vector2();
@@ -295,9 +302,44 @@ window.addEventListener("mousemove", function (e) {
   plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
   raycaster.setFromCamera(mouse, camera);
   raycaster.ray.intersectPlane(plane, intersectionPoint);
-  mouseTracker.visible = isSeeking;
   mouseTracker.position.copy(intersectionPoint);
 });
+
+//
+
+let obstacle: THREE.Mesh;
+
+function create_obstacle_box() {
+  const boxGeo = new THREE.BoxGeometry(10, 10, 10);
+  const boxMat = new THREE.MeshStandardMaterial({
+    color: 0xffea00,
+  });
+  const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+  obstacle = boxMesh;
+  scene.add(obstacle);
+}
+
+function posGen(numPoints: number, pow: number) {
+	let turFraction = (1 + Math.sqrt(5))/2;
+	for(let i=0; i<numPoints; i++) {
+		let dist = Math.pow(i / (numPoints - 1), pow);
+		let angle = 2 * Math.PI * turFraction * i;
+		let x = dist * Math.cos(angle);
+		let y = dist * Math.sin(angle);
+		PlotPoint(x, y);
+	}
+	
+	function PlotPoint(x: number, y: number) {
+		const pointGeo = new THREE.SphereGeometry(0.01);
+		const pointMat = new THREE.MeshBasicMaterial();
+		
+		const mesh = new THREE.Mesh(pointGeo, pointMat);
+		mesh.position.set(x, y, 0);
+		scene.add(mesh);
+	}
+}
+
+//
 
 function init_controllers() {
   function generate_Slider(id: number, min: number, max: number, init: number, name: string) {
@@ -339,6 +381,7 @@ function init_controllers() {
   document.getElementById("controller")?.appendChild(trackingButton);
   document!.getElementById("seekingController")!.oninput = function () {
     isSeeking = (document!.getElementById("seekingController")! as HTMLInputElement).checked;
+    mouseTracker.visible = isSeeking;
   };
 
   document.getElementById("controller")?.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
@@ -356,12 +399,29 @@ function init_controllers() {
     cohesionFactor = Number((document!.getElementById("Slider2")! as HTMLInputElement).value);
     document!.getElementById("SliderValue2")!.innerHTML = String(cohesionFactor.toFixed(4));
   };
+  
+  document.getElementById("controller")?.appendChild(generate_Slider(3, -boundRange, boundRange, obstacle.position.x, "obstacle.position.x"));
+  document!.getElementById("Slider3")!.oninput = function () {
+    obstacle.position.x = Number((document!.getElementById("Slider3")! as HTMLInputElement).value);
+    document!.getElementById("SliderValue3")!.innerHTML = String(avoidFactor.toFixed(4));
+  };
+  document.getElementById("controller")?.appendChild(generate_Slider(4, -boundRange, boundRange, obstacle.position.y, "obstacle.position.y"));
+  document!.getElementById("Slider4")!.oninput = function () {
+    obstacle.position.y = Number((document!.getElementById("Slider4")! as HTMLInputElement).value);
+    document!.getElementById("SliderValue4")!.innerHTML = String(avoidFactor.toFixed(4));
+  };
+  document.getElementById("controller")?.appendChild(generate_Slider(5, -boundRange, boundRange, obstacle.position.z, "obstacle.position.z"));
+  document!.getElementById("Slider5")!.oninput = function () {
+    obstacle.position.z = Number((document!.getElementById("Slider5")! as HTMLInputElement).value);
+    document!.getElementById("SliderValue5")!.innerHTML = String(avoidFactor.toFixed(4));
+  };
 }
 
 async function main() {
   const boid_num = 500;
   create_boids(boid_num);
   create_mouse_tracking_ball();
+  // create_obstacle_box();
   draw_boids();
   init_controllers();
   renderer.setAnimationLoop(animate);
