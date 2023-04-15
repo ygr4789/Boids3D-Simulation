@@ -42,7 +42,7 @@ scene.add(lightBack);
 
 // # ===========Creating Bound Box ============
 
-const boundRange = 25;
+const boundRange = 20;
 
 const bound_material = new THREE.MeshStandardMaterial();
 bound_material.color = new THREE.Color(0x444488);
@@ -63,7 +63,7 @@ scene.add(edges);
 let boidsP: Array<THREE.Vector3> = [];
 let boidsV: Array<THREE.Vector3> = [];
 let boidsN: number;
-let boidsShapes: Array<THREE.Mesh> = [];
+let boidShapes: Array<THREE.Mesh> = [];
 
 let protectedRange = 3;
 let avoidFactor = 0.01;
@@ -79,7 +79,7 @@ let velocityLimit = 0.5;
 
 let isPlay = false;
 let isSeeking = false;
-let obstacleAvailable = false;
+let obstacleAvailable = true;
 
 //
 
@@ -146,20 +146,20 @@ function create_boids(num: number) {
     material.color = new THREE.Color(0x993333);
     material.flatShading = true;
     const boidShape = new THREE.Mesh(geometry, material);
-    boidsShapes.push(boidShape);
+    boidShapes.push(boidShape);
     scene.add(boidShape);
   }
 }
 
 function draw_boids() {
   for (let i = 0; i < boidsN; i++) {
-    boidsShapes[i].position.copy(boidsP[i]);
+    boidShapes[i].position.copy(boidsP[i]);
 
     let norm = boidsV[i].length();
     let axis = boidsV[i].clone();
     axis.setY(axis.y + norm);
     axis.normalize();
-    boidsShapes[i].setRotationFromAxisAngle(axis, Math.PI);
+    boidShapes[i].setRotationFromAxisAngle(axis, Math.PI);
   }
 }
 
@@ -170,13 +170,15 @@ function update_boids() {
     let vel2 = rule2(i);
     let vel3 = rule3(i);
     let vel4 = rule4(i);
+    let vel5 = rule5(i);
     boidsV[i].add(vel1).add(vel2).add(vel3);
     if (isSeeking) boidsV[i].add(vel4);
+    if (obstacleAvailable) boidsV[i].add(vel5);
+    handle_boundary(i);
+    limit_velocity(i);
     boidsP[i].add(boidsV[i]);
     boidsTree.update(i);
   }
-  handle_boundary();
-  limit_velocity();
 }
 
 function rule1(i: number): THREE.Vector3 {
@@ -219,27 +221,47 @@ function rule4(i: number): THREE.Vector3 {
 }
 function rule5(i: number): THREE.Vector3 {
   // Obstacle
-  return new THREE.Vector3()
-}
+  let dir = new THREE.Vector3();
+  let dist: number;
+  for (let j = 0; j < raderArray.length; j++) {
+    dir = new THREE.Vector3().copy(raderArray[j]).applyQuaternion(boidShapes[i].quaternion);
+    const ray = new THREE.Raycaster(boidShapes[i].position, dir, 0, visibilityRange);
 
-function handle_boundary() {
-  for (let i = 0; i < boidsN; i++) {
-    for (let n = 0; n < 3; n++) {
-      if (boidsP[i].getComponent(n) < -boundRange) boidsV[i].setComponent(n, boidsV[i].getComponent(n) + pushFactor);
-      if (boidsP[i].getComponent(n) > boundRange) boidsV[i].setComponent(n, boidsV[i].getComponent(n) - pushFactor);
+    const intersect1 = ray.intersectObjects([obstacle]);
+    const invray = new THREE.Raycaster(boidShapes[i].position.clone().add(dir.clone().multiplyScalar(visibilityRange)), dir.clone().multiplyScalar(-1), 0, visibilityRange);
+    const intersect2 = invray.intersectObjects([bound]);
+    // const intersects = ray.intersectObjects([bound, obstacle]);
+
+    if (intersect1.length === 0 && intersect2.length === 0) {
+      // if (intersects.length === 0) {
+      if (j == 0) return new THREE.Vector3();
+      break;
+    }
+    if (j == 0) {
+      if (intersect1.length !== 0) dist = intersect1[0].distance;
+      if (intersect2.length !== 0) dist = visibilityRange - intersect2[0].distance;
     }
   }
+  // return dir.multiplyScalar(1);
+  console.log(dist!);
+  return dir.multiplyScalar(0.1 * visibilityRange / dist!);
 }
-function limit_velocity() {
-  for (let V of boidsV) {
-    let vnorm = V.length();
-    if (vnorm > velocityLimit) V.multiplyScalar(velocityLimit / vnorm);
+
+function handle_boundary(i: number) {
+  for (let n = 0; n < 3; n++) {
+    if (boidsP[i].getComponent(n) < -boundRange) boidsV[i].setComponent(n, boidsV[i].getComponent(n) + pushFactor);
+    if (boidsP[i].getComponent(n) > boundRange) boidsV[i].setComponent(n, boidsV[i].getComponent(n) - pushFactor);
   }
+}
+function limit_velocity(i: number) {
+  let vnorm = boidsV[i].length();
+  if (vnorm > velocityLimit) boidsV[i].multiplyScalar(velocityLimit / vnorm);
 }
 
 function animate() {
   update_boids();
   draw_boids();
+  // visualize_obstacle_detection();
   renderer.render(scene, camera);
 }
 
@@ -255,7 +277,7 @@ function init_state() {
       .random()
       .subScalar(0.5)
       .multiplyScalar(boundRange * 2);
-    let V = new THREE.Vector3().randomDirection().multiplyScalar((Math.random() * velocityLimit) / 2);
+    let V = new THREE.Vector3().randomDirection().multiplyScalar(velocityLimit / 2);
     boidsP.push(P);
     boidsV.push(V);
   }
@@ -298,7 +320,7 @@ window.addEventListener("mousemove", function (e) {
 let obstacle: THREE.Mesh;
 
 function create_obstacle_box() {
-  const boxGeo = new THREE.BoxGeometry(10, 10, 10);
+  const boxGeo = new THREE.BoxGeometry(10, boundRange * 2, 10);
   const boxMat = new THREE.MeshStandardMaterial({
     color: 0xffea00,
   });
@@ -308,24 +330,46 @@ function create_obstacle_box() {
   scene.add(obstacle);
 }
 
-function posGen(numPoints: number, pow: number) {
-	let turFraction = (1 + Math.sqrt(5))/2;
-	for(let i=0; i<numPoints; i++) {
-		let dist = Math.pow(i / (numPoints - 1), pow);
-		let angle = 2 * Math.PI * turFraction * i;
-		let x = dist * Math.cos(angle);
-		let y = dist * Math.sin(angle);
-		PlotPoint(x, y);
-	}
-	
-	function PlotPoint(x: number, y: number) {
-		const pointGeo = new THREE.SphereGeometry(0.01);
-		const pointMat = new THREE.MeshBasicMaterial();
-		
-		const mesh = new THREE.Mesh(pointGeo, pointMat);
-		mesh.position.set(x, y, 0);
-		scene.add(mesh);
-	}
+let raderArray: Array<THREE.Vector3> = [];
+function generate_rader(numPoints: number, frac: number) {
+  let turFraction = (1 + Math.sqrt(5)) / 2;
+  for (let i = 0; i < numPoints; i++) {
+    let t = i / (numPoints - 1);
+    let inclination = Math.acos(1 - t * (1 - Math.cos(frac * (Math.PI / 2))));
+    let azimuth = 2 * Math.PI * turFraction * i;
+
+    let x = Math.sin(inclination) * Math.cos(azimuth);
+    let z = Math.sin(inclination) * Math.sin(azimuth);
+    let y = Math.cos(inclination);
+    raderArray.push(new THREE.Vector3(x, y, z));
+  }
+}
+
+function visualize_rader(len: number) {
+  for (let V of raderArray) {
+    const material = new THREE.LineBasicMaterial({
+      color: 0x0000ff,
+    });
+    const points = [];
+    points.push(new THREE.Vector3());
+    points.push(new THREE.Vector3().copy(V).multiplyScalar(len));
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, material);
+    boidShapes[0].add(line);
+
+    (boidShapes[0].material as THREE.MeshBasicMaterial).color = new THREE.Color(0x339933);
+  }
+}
+
+function visualize_obstacle_detection() {
+  for (let i = 0; i < raderArray.length; i++) {
+    let dir = new THREE.Vector3().copy(raderArray[i]).applyQuaternion(boidShapes[0].quaternion);
+    const ray = new THREE.Raycaster(boidShapes[0].position, dir, 0, visibilityRange);
+    ((boidShapes[0].children[i] as THREE.Line).material as THREE.MeshBasicMaterial).color = ray.intersectObjects([obstacle, bound]).length === 0 ? new THREE.Color(0x00ff00) : new THREE.Color(0xff0000);
+    const invray = new THREE.Raycaster(boidShapes[0].position.clone().add(dir.clone().multiplyScalar(visibilityRange)), dir.multiplyScalar(-1), 0, visibilityRange);
+    if (invray.intersectObjects([obstacle, bound]).length !== 0) ((boidShapes[0].children[i] as THREE.Line).material as THREE.MeshBasicMaterial).color = new THREE.Color(0xff0000);
+  }
 }
 
 //
@@ -388,7 +432,7 @@ function init_controllers() {
     cohesionFactor = Number((document!.getElementById("Slider2")! as HTMLInputElement).value);
     document!.getElementById("SliderValue2")!.innerHTML = String(cohesionFactor.toFixed(4));
   };
-  
+
   document.getElementById("controller")?.appendChild(generate_Slider(3, -boundRange, boundRange, obstacle.position.x, "obstacle.position.x"));
   document!.getElementById("Slider3")!.oninput = function () {
     obstacle.position.x = Number((document!.getElementById("Slider3")! as HTMLInputElement).value);
@@ -407,12 +451,16 @@ function init_controllers() {
 }
 
 async function main() {
-  const boid_num = 500;
+  const boid_num = 200;
   create_boids(boid_num);
   create_mouse_tracking_ball();
   create_obstacle_box();
   draw_boids();
   init_controllers();
+
+  generate_rader(100, 0.7);
+  // visualize_rader(visibilityRange);
+
   renderer.setAnimationLoop(animate);
 }
 
