@@ -66,9 +66,9 @@ let boidsN: number;
 let boidShapes: Array<THREE.Mesh> = [];
 
 let protectedRange = 3;
-let avoidFactor = 0.01;
-let alignFactor = 0.1;
-let cohesionFactor = 0.01;
+let avoidFactor = 0.02;
+let alignFactor = 0.3;
+let cohesionFactor = 0.02;
 let pushFactor = 0.05;
 let seekingFactor = 0.05;
 
@@ -141,7 +141,7 @@ function create_boids(num: number) {
   init_state();
 
   for (let i = 0; i < num; i++) {
-    const geometry = new THREE.CylinderGeometry(0.0, 0.75, 2.25, 4, 1);
+    const geometry = new THREE.CylinderGeometry(0.0, 0.75, 2.25, 20, 1);
     const material = new THREE.MeshPhongMaterial();
     material.color = new THREE.Color(0x993333);
     material.flatShading = true;
@@ -230,10 +230,8 @@ function rule5(i: number): THREE.Vector3 {
     const intersect1 = ray.intersectObjects([obstacle]);
     const invray = new THREE.Raycaster(boidShapes[i].position.clone().add(dir.clone().multiplyScalar(visibilityRange)), dir.clone().multiplyScalar(-1), 0, visibilityRange);
     const intersect2 = invray.intersectObjects([bound]);
-    // const intersects = ray.intersectObjects([bound, obstacle]);
 
     if (intersect1.length === 0 && intersect2.length === 0) {
-      // if (intersects.length === 0) {
       if (j == 0) return new THREE.Vector3();
       break;
     }
@@ -242,9 +240,7 @@ function rule5(i: number): THREE.Vector3 {
       if (intersect2.length !== 0) dist = visibilityRange - intersect2[0].distance;
     }
   }
-  // return dir.multiplyScalar(1);
-  console.log(dist!);
-  return dir.multiplyScalar(0.1 * visibilityRange / dist!);
+  return dir.multiplyScalar(1 * (visibilityRange / dist!)**2);
 }
 
 function handle_boundary(i: number) {
@@ -273,15 +269,25 @@ function init_state() {
   boidsP = [];
   boidsV = [];
   for (let i = 0; i < boidsN; i++) {
-    let P = new THREE.Vector3()
-      .random()
-      .subScalar(0.5)
-      .multiplyScalar(boundRange * 2);
+    let P;
+    while(true) {
+      P = new THREE.Vector3()
+        .random()
+        .subScalar(0.5)
+        .multiplyScalar(boundRange * 2);
+      if(!position_in_object(P, obstacle)) break;
+    }
     let V = new THREE.Vector3().randomDirection().multiplyScalar(velocityLimit / 2);
     boidsP.push(P);
     boidsV.push(V);
   }
   boidsTree.init();
+}
+
+function position_in_object(P: THREE.Vector3, obj: THREE.Object3D): boolean {
+  let ray = new THREE.Raycaster(P, new THREE.Vector3(0, 1, 0));
+  if(ray.intersectObject(obj).length % 2 == 0) return false;
+  else return true;
 }
 
 //
@@ -292,7 +298,6 @@ function create_mouse_tracking_ball() {
   const sphereGeo = new THREE.SphereGeometry(1);
   const sphereMat = new THREE.MeshStandardMaterial({
     color: 0xffea00,
-    // opacity: 1,
   });
   const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
   mouseTracker = sphereMesh;
@@ -319,10 +324,10 @@ window.addEventListener("mousemove", function (e) {
 
 let obstacle: THREE.Mesh;
 
-function create_obstacle_box() {
-  const boxGeo = new THREE.BoxGeometry(10, boundRange * 2, 10);
+function create_obstacle() {
+  const boxGeo = new THREE.CylinderGeometry(5, 5, boundRange * 2, 20);
   const boxMat = new THREE.MeshStandardMaterial({
-    color: 0xffea00,
+    color: 0x999933,
   });
   const boxMesh = new THREE.Mesh(boxGeo, boxMat);
   obstacle = boxMesh;
@@ -451,10 +456,10 @@ function init_controllers() {
 }
 
 async function main() {
-  const boid_num = 200;
+  const boid_num = 500;
+  create_obstacle();
   create_boids(boid_num);
   create_mouse_tracking_ball();
-  create_obstacle_box();
   draw_boids();
   init_controllers();
 
