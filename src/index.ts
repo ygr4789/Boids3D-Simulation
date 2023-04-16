@@ -48,6 +48,7 @@ const bound_material = new THREE.MeshStandardMaterial();
 bound_material.color = new THREE.Color(0x444488);
 bound_material.transparent = true;
 bound_material.opacity = 0.1;
+bound_material.side = THREE.BackSide;
 
 const edge_material = new THREE.LineBasicMaterial();
 edge_material.color = new THREE.Color(0xfffffff);
@@ -170,11 +171,11 @@ function update_boids() {
     let vel2 = rule2(i);
     let vel3 = rule3(i);
     let vel4 = rule4(i);
-    let vel5 = rule5(i);
     boidsV[i].add(vel1).add(vel2).add(vel3);
     if (isSeeking) boidsV[i].add(vel4);
+    let vel5 = rule5(i);
     if (obstacleAvailable) boidsV[i].add(vel5);
-    handle_boundary(i);
+    // handle_boundary(i);
     limit_velocity(i);
     boidsP[i].add(boidsV[i]);
     boidsTree.update(i);
@@ -224,23 +225,19 @@ function rule5(i: number): THREE.Vector3 {
   let dir = new THREE.Vector3();
   let dist: number;
   for (let j = 0; j < raderArray.length; j++) {
-    dir = new THREE.Vector3().copy(raderArray[j]).applyQuaternion(boidShapes[i].quaternion);
+    dir = raderArray[j].clone().applyQuaternion(boidShapes[i].quaternion);
     const ray = new THREE.Raycaster(boidShapes[i].position, dir, 0, visibilityRange);
+    const intresects = ray.intersectObjects([...obstacles, bound]);
 
-    const intersect1 = ray.intersectObjects([obstacle]);
-    const invray = new THREE.Raycaster(boidShapes[i].position.clone().add(dir.clone().multiplyScalar(visibilityRange)), dir.clone().multiplyScalar(-1), 0, visibilityRange);
-    const intersect2 = invray.intersectObjects([bound]);
-
-    if (intersect1.length === 0 && intersect2.length === 0) {
+    if (intresects.length === 0) {
       if (j == 0) return new THREE.Vector3();
       break;
     }
     if (j == 0) {
-      if (intersect1.length !== 0) dist = intersect1[0].distance;
-      if (intersect2.length !== 0) dist = visibilityRange - intersect2[0].distance;
+      if (intresects.length !== 0) dist = intresects[0].distance;
     }
   }
-  return dir.multiplyScalar(1 * (visibilityRange / dist!)**2);
+  return dir.multiplyScalar(1 * (visibilityRange / dist!) ** 2);
 }
 
 function handle_boundary(i: number) {
@@ -270,12 +267,12 @@ function init_state() {
   boidsV = [];
   for (let i = 0; i < boidsN; i++) {
     let P;
-    while(true) {
+    while (true) {
       P = new THREE.Vector3()
         .random()
         .subScalar(0.5)
         .multiplyScalar(boundRange * 2);
-      if(!position_in_object(P, obstacle)) break;
+      if (!position_in_obstacles(P)) break;
     }
     let V = new THREE.Vector3().randomDirection().multiplyScalar(velocityLimit / 2);
     boidsP.push(P);
@@ -284,10 +281,14 @@ function init_state() {
   boidsTree.init();
 }
 
-function position_in_object(P: THREE.Vector3, obj: THREE.Object3D): boolean {
-  let ray = new THREE.Raycaster(P, new THREE.Vector3(0, 1, 0));
-  if(ray.intersectObject(obj).length % 2 == 0) return false;
-  else return true;
+function position_in_obstacles(P: THREE.Vector3): boolean {
+  for (let obstacle of obstacles) {
+    let lP = obstacle.worldToLocal(P.clone());
+    if (obstacle.geometry.boundingBox?.containsPoint(lP)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 //
@@ -322,17 +323,27 @@ window.addEventListener("mousemove", function (e) {
 
 //
 
-let obstacle: THREE.Mesh;
+let obstacles: Array<THREE.Mesh> = [];
 
-function create_obstacle() {
-  const boxGeo = new THREE.CylinderGeometry(5, 5, boundRange * 2, 20);
-  const boxMat = new THREE.MeshStandardMaterial({
-    color: 0x999933,
-  });
-  const boxMesh = new THREE.Mesh(boxGeo, boxMat);
-  obstacle = boxMesh;
-  obstacle.visible = obstacleAvailable;
-  scene.add(obstacle);
+function create_obstacle(num: number) {
+  obstacles = [];
+  for (let i = 0; i < num; i++) {
+    const radius = 3;
+    const height = boundRange * (1 + Math.random());
+    const x = (2 * Math.random() - 1) * (boundRange - radius);
+    const z = (2 * Math.random() - 1) * (boundRange - radius);
+    const obsGeo = new THREE.CylinderGeometry(radius, radius, height, 20);
+    const obsMat = new THREE.MeshStandardMaterial({
+      color: 0x999933,
+    });
+    const obsMesh = new THREE.Mesh(obsGeo, obsMat);
+    obsMesh.visible = obstacleAvailable;
+    obsMesh.position.copy(new THREE.Vector3(x, height / 2 - boundRange, z));
+    obsMesh.geometry.computeBoundingBox();
+    
+    scene.add(obsMesh);
+    obstacles.push(obsMesh);
+  }
 }
 
 let raderArray: Array<THREE.Vector3> = [];
@@ -371,9 +382,8 @@ function visualize_obstacle_detection() {
   for (let i = 0; i < raderArray.length; i++) {
     let dir = new THREE.Vector3().copy(raderArray[i]).applyQuaternion(boidShapes[0].quaternion);
     const ray = new THREE.Raycaster(boidShapes[0].position, dir, 0, visibilityRange);
-    ((boidShapes[0].children[i] as THREE.Line).material as THREE.MeshBasicMaterial).color = ray.intersectObjects([obstacle, bound]).length === 0 ? new THREE.Color(0x00ff00) : new THREE.Color(0xff0000);
-    const invray = new THREE.Raycaster(boidShapes[0].position.clone().add(dir.clone().multiplyScalar(visibilityRange)), dir.multiplyScalar(-1), 0, visibilityRange);
-    if (invray.intersectObjects([obstacle, bound]).length !== 0) ((boidShapes[0].children[i] as THREE.Line).material as THREE.MeshBasicMaterial).color = new THREE.Color(0xff0000);
+    const intersects = ray.intersectObjects([...obstacles, bound]);
+    ((boidShapes[0].children[i] as THREE.Line).material as THREE.MeshBasicMaterial).color = intersects.length === 0 ? new THREE.Color(0x00ff00) : new THREE.Color(0xff0000);
   }
 }
 
@@ -437,33 +447,17 @@ function init_controllers() {
     cohesionFactor = Number((document!.getElementById("Slider2")! as HTMLInputElement).value);
     document!.getElementById("SliderValue2")!.innerHTML = String(cohesionFactor.toFixed(4));
   };
-
-  document.getElementById("controller")?.appendChild(generate_Slider(3, -boundRange, boundRange, obstacle.position.x, "obstacle.position.x"));
-  document!.getElementById("Slider3")!.oninput = function () {
-    obstacle.position.x = Number((document!.getElementById("Slider3")! as HTMLInputElement).value);
-    document!.getElementById("SliderValue3")!.innerHTML = String(avoidFactor.toFixed(4));
-  };
-  document.getElementById("controller")?.appendChild(generate_Slider(4, -boundRange, boundRange, obstacle.position.y, "obstacle.position.y"));
-  document!.getElementById("Slider4")!.oninput = function () {
-    obstacle.position.y = Number((document!.getElementById("Slider4")! as HTMLInputElement).value);
-    document!.getElementById("SliderValue4")!.innerHTML = String(avoidFactor.toFixed(4));
-  };
-  document.getElementById("controller")?.appendChild(generate_Slider(5, -boundRange, boundRange, obstacle.position.z, "obstacle.position.z"));
-  document!.getElementById("Slider5")!.oninput = function () {
-    obstacle.position.z = Number((document!.getElementById("Slider5")! as HTMLInputElement).value);
-    document!.getElementById("SliderValue5")!.innerHTML = String(avoidFactor.toFixed(4));
-  };
 }
 
 async function main() {
-  const boid_num = 500;
-  create_obstacle();
+  const boid_num = 100;
+  create_obstacle(3);
   create_boids(boid_num);
   create_mouse_tracking_ball();
   draw_boids();
   init_controllers();
 
-  generate_rader(100, 0.7);
+  generate_rader(100, 1.5);
   // visualize_rader(visibilityRange);
 
   renderer.setAnimationLoop(animate);
