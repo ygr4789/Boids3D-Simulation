@@ -10,7 +10,7 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.jsx?$/,
+        test: /\.js?$/,
         use: {
           loader: "babel-loader",
           options: {
@@ -19,7 +19,14 @@ module.exports = {
         },
       },
       // all files with a `.ts` or `.tsx` extension will be handled by `ts-loader`
-      { test: /\.tsx?$/, loader: "ts-loader" },
+      { test: /\.ts?$/, loader: "ts-loader" },
     ],
   },
+  devServer: {
+    static: './',
+    port: 3000,
+    hot: true,
+    open: true,
+  },
+  mode: 'development'
 };

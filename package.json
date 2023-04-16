@@ -2,8 +2,9 @@
   "name": "boidsmodel-additional",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/index.js",
+  "main": "dist/bundle.js",
   "scripts": {
+    "start": "webpack serve",
     "build": "webpack",
     "watch": "webpack -w"
   },
@@ -19,7 +20,8 @@
     "ts-loader": "^9.4.2",
     "typescript": "^5.0.3",
     "webpack": "^5.78.0",
-    "webpack-cli": "^5.0.1"
+    "webpack-cli": "^5.0.1",
+    "webpack-dev-server": "^4.13.3"
   },
   "dependencies": {
     "kd-tree-javascript": "^1.0.3",
