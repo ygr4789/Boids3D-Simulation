@@ -3,7 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as KD_TREE from "kd-tree-javascript";
 
 const scene = new THREE.Scene();
-const setcolor = "#bbbbbb";
+const setcolor = "#000000";
 scene.background = new THREE.Color(setcolor);
 
 const renderer = new THREE.WebGLRenderer({
@@ -56,8 +56,8 @@ edge_material.color = new THREE.Color(0xfffffff);
 const bound = new THREE.Mesh(new THREE.BoxGeometry(boundRange * 2, boundRange * 2, boundRange * 2), bound_material);
 const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(boundRange * 2, boundRange * 2, boundRange * 2)));
 
-scene.add(bound);
-scene.add(edges);
+// scene.add(bound);
+// scene.add(edges);
 
 // ===================== CORE =====================
 
@@ -67,16 +67,18 @@ let boidsN: number;
 let boidShapes: Array<THREE.Mesh> = [];
 
 let protectedRange = 3;
-let avoidFactor = 0.01;
-let alignFactor = 0.1;
-let cohesionFactor = 0.01;
-let pushFactor = 0.05;
-let seekingFactor = 0.05;
+let avoidFactor = 50;
+let alignFactor = 10;
+let cohesionFactor = 50;
+let seekingFactor = 3;
+
+let obstacleDetectRange = 10;
+let obstacleAvoidFactor = 1000;
 
 let nearestCount = 10;
 
 let visibilityRange = 10;
-let velocityLimit = 0.5;
+let velocityLimit = 30;
 
 let isPlay = false;
 let isSeeking = false;
@@ -137,12 +139,11 @@ let boidsTree: {
 
 function create_boids(num: number) {
   boidsN = num;
-  init_state();
 
   for (let i = 0; i < num; i++) {
     const geometry = new THREE.CylinderGeometry(0.0, 0.75, 2.25, 20, 1);
     const material = new THREE.MeshPhongMaterial();
-    material.color = new THREE.Color(0x993333);
+    material.color = new THREE.Color(0x335577);
     material.flatShading = true;
     const boidShape = new THREE.Mesh(geometry, material);
     boidShapes.push(boidShape);
@@ -162,28 +163,28 @@ function draw_boids() {
   }
 }
 
-function update_boids() {
+function update_boids(dt: number) {
   if (!isPlay) return;
   for (let i = 0; i < boidsN; i++) {
-    let vel1 = rule1(i);
-    let vel2 = rule2(i);
-    let vel3 = rule3(i);
-    let vel4 = rule4(i);
-    let vel5 = rule5(i);
-    boidsV[i].add(vel1).add(vel2).add(vel3);
-    if (isSeeking) boidsV[i].add(vel4);
-    if (obstacleAvailable) boidsV[i].add(vel5);
+    let acc = new THREE.Vector3();
+    let acc1 = rule1(i);
+    let acc2 = rule2(i);
+    let acc3 = rule3(i);
+    let acc4 = rule4(i);
+    let acc5 = rule5(i);
+    acc.add(acc1).add(acc2).add(acc3);
+    if (isSeeking) acc.add(acc4);
+    if (obstacleAvailable) acc.add(acc5);
+    boidsV[i].add(acc.multiplyScalar(dt));
     handle_boundary(i);
     limit_velocity(i);
-    correct_collision(i);
-    boidsP[i].add(boidsV[i]);
-    if (check_collision(i)) console.log("collision detected");
+    prevent_collision(i, dt);
+    boidsP[i].add(boidsV[i].clone().multiplyScalar(dt));
     boidsTree.update(i);
   }
 }
 
-function rule1(i: number): THREE.Vector3 {
-  // Seperation
+function rule1(i: number): THREE.Vector3 { // Seperation
   let ret = new THREE.Vector3();
   let neighbors = boidsTree.nearest(i, nearestCount + 1, protectedRange);
   for (let j of neighbors) {
@@ -192,8 +193,8 @@ function rule1(i: number): THREE.Vector3 {
 
   return ret.multiplyScalar(avoidFactor);
 }
-function rule2(i: number): THREE.Vector3 {
-  // Alignment
+
+function rule2(i: number): THREE.Vector3 { // Alignment
   let ret = new THREE.Vector3();
   let neighbors = boidsTree.nearest(i, nearestCount + 1, visibilityRange);
   if (neighbors.length <= 1) return ret;
@@ -203,8 +204,8 @@ function rule2(i: number): THREE.Vector3 {
   ret.divideScalar(neighbors.length - 1);
   return ret.multiplyScalar(alignFactor);
 }
-function rule3(i: number): THREE.Vector3 {
-  // Cohesion
+
+function rule3(i: number): THREE.Vector3 { // Cohesion
   let ret = new THREE.Vector3();
   let neighbors = boidsTree.nearest(i, nearestCount + 1, visibilityRange);
   if (neighbors.length <= 1) return ret;
@@ -214,57 +215,46 @@ function rule3(i: number): THREE.Vector3 {
   ret.divideScalar(neighbors.length - 1);
   return ret.multiplyScalar(cohesionFactor);
 }
-function rule4(i: number): THREE.Vector3 {
-  // Goal Seeking
-  let dir = new THREE.Vector3().subVectors(intersectionPoint, boidsP[i]).normalize();
-  let ret = new THREE.Vector3().subVectors(dir.multiplyScalar(velocityLimit), boidsV[i]);
+
+function rule4(i: number): THREE.Vector3 { // Goal Seeking
+  let ret = new THREE.Vector3().subVectors(mouseTracker.position, boidsP[i]).normalize();
+  ret.subVectors(ret.multiplyScalar(velocityLimit), boidsV[i]);
   return ret.multiplyScalar(seekingFactor);
 }
-function rule5(i: number): THREE.Vector3 {
-  // Obstacle
-  let dir = new THREE.Vector3();
+
+function rule5(i: number): THREE.Vector3 { // Obstacle Avoidance
   let dist: number;
   for (let j = 0; j < raderArray.length; j++) {
-    dir = raderArray[j].clone().applyQuaternion(boidShapes[i].quaternion);
-    const ray = new THREE.Raycaster(boidsP[i], dir, 0, visibilityRange);
+    let dir = raderArray[j].clone().applyQuaternion(boidShapes[i].quaternion);
+    const ray = new THREE.Raycaster(boidsP[i], dir, 0, obstacleDetectRange);
     const intresects = ray.intersectObjects([...obstacles, bound]);
 
     if (intresects.length === 0) {
-      if (j == 0) {
-        return new THREE.Vector3();
+      if (j === 0) return new THREE.Vector3();
+      else {
+        return dir.multiplyScalar(obstacleAvoidFactor * (obstacleDetectRange / (dist! + 0.01)));
       }
-      break;
-    }
-    if (j == 0) {
-      if (intresects.length !== 0) dist = intresects[0].distance;
-    }
+    } else if (j === 0) dist = intresects[0].distance;
   }
-  return dir.multiplyScalar(1 * (visibilityRange / dist!));
+  return new THREE.Vector3();
 }
 
-function correct_collision(i: number) {
-  const ray = new THREE.Raycaster(boidsP[i], boidsV[i].clone().normalize(), 0, boidsV[i].length());
+function prevent_collision(i: number, dt: number) {
+  const ray = new THREE.Raycaster(boidsP[i], boidsV[i].clone().normalize(), 0, boidsV[i].length() * dt);
   const intresects = ray.intersectObjects([...obstacles, bound]);
   if (intresects.length > 0) {
     const dist = intresects[0].distance;
-    boidsV[i].normalize().multiplyScalar(dist / 2);
+    boidsV[i].normalize().multiplyScalar(dist / (1.1 * dt));
   }
-}
-function check_collision(i: number): boolean {
-  const ray = new THREE.Raycaster(boidsP[i].clone().add(new THREE.Vector3(0, boundRange * 2, 0)), new THREE.Vector3(0, -1, 0), 0, boundRange * 2);
-  const intresects = ray.intersectObjects([...obstacles]);
-  if (intresects.length > 0) {
-    return true;
-  }
-  return false;
 }
 
 function handle_boundary(i: number) {
   for (let n = 0; n < 3; n++) {
-    if (boidsP[i].getComponent(n) < -boundRange) boidsV[i].setComponent(n, boidsV[i].getComponent(n) + pushFactor);
-    if (boidsP[i].getComponent(n) > boundRange) boidsV[i].setComponent(n, boidsV[i].getComponent(n) - pushFactor);
+    if (boidsP[i].getComponent(n) < -boundRange) boidsV[i].setComponent(n, 0.01);
+    if (boidsP[i].getComponent(n) > boundRange) boidsV[i].setComponent(n, -0.01);
   }
 }
+
 function limit_velocity(i: number) {
   let vnorm = boidsV[i].length();
   if (vnorm > velocityLimit) boidsV[i].multiplyScalar(velocityLimit / vnorm);
@@ -282,22 +272,23 @@ function create_mouse_tracking_ball() {
   const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
   mouseTracker = sphereMesh;
   scene.add(mouseTracker);
+  
+  const mouse = new THREE.Vector2();
+  const intersectionPoint = new THREE.Vector3();
+  const planeNormal = new THREE.Vector3();
+  const plane = new THREE.Plane();
+  const raycaster = new THREE.Raycaster();
+  
+  window.addEventListener("mousemove", function (e) {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    planeNormal.copy(camera.position).normalize();
+    plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
+    raycaster.setFromCamera(mouse, camera);
+    raycaster.ray.intersectPlane(plane, intersectionPoint);
+    mouseTracker.position.copy(intersectionPoint);
+  });
 }
-const mouse = new THREE.Vector2();
-const intersectionPoint = new THREE.Vector3();
-const planeNormal = new THREE.Vector3();
-const plane = new THREE.Plane();
-const raycaster = new THREE.Raycaster();
-
-window.addEventListener("mousemove", function (e) {
-  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  planeNormal.copy(camera.position).normalize();
-  plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
-  raycaster.setFromCamera(mouse, camera);
-  raycaster.ray.intersectPlane(plane, intersectionPoint);
-  mouseTracker.position.copy(intersectionPoint);
-});
 
 // ===================== OBSTACLE & DETECTING =====================
 
@@ -312,7 +303,7 @@ function create_obstacle(num: number) {
     const z = (2 * Math.random() - 1) * (boundRange - radius);
     const obsGeo = new THREE.CylinderGeometry(radius, radius, height, 20);
     const obsMat = new THREE.MeshStandardMaterial({
-      color: 0x999933,
+      color: 0x448844,
     });
     const obsMesh = new THREE.Mesh(obsGeo, obsMat);
     obsMesh.visible = obstacleAvailable;
@@ -401,22 +392,21 @@ async function main() {
   create_obstacle(3);
   create_boids(boid_num);
   create_mouse_tracking_ball();
-  draw_boids();
   init_controllers();
   generate_rader(100, 1.5);
+  
+  init_state();
 
   let prevTime = 0;
-  let frameRate = 120;
   renderer.setAnimationLoop(animate);
 
   function animate(timestamp: number) {
-    if (timestamp - prevTime > 1000 / frameRate) {
-      update_boids();
-      draw_boids();
-      mouseTracker.visible = isSeeking;
-      renderer.render(scene, camera);
-      prevTime = timestamp;
-    }
+    let timediff = (timestamp - prevTime) / 1000;
+    update_boids(timediff);
+    draw_boids();
+    mouseTracker.visible = isSeeking;
+    renderer.render(scene, camera);
+    prevTime = timestamp;
   }
 }
 
