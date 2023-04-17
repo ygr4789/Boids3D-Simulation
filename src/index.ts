@@ -67,9 +67,9 @@ let boidsN: number;
 let boidShapes: Array<THREE.Mesh> = [];
 
 let protectedRange = 3;
-let avoidFactor = 0.02;
-let alignFactor = 0.3;
-let cohesionFactor = 0.02;
+let avoidFactor = 0.01;
+let alignFactor = 0.1;
+let cohesionFactor = 0.01;
 let pushFactor = 0.05;
 let seekingFactor = 0.05;
 
@@ -81,8 +81,6 @@ let velocityLimit = 0.5;
 let isPlay = false;
 let isSeeking = false;
 let obstacleAvailable = true;
-
-//
 
 type treeNode = {
   x: number;
@@ -135,7 +133,7 @@ let boidsTree: {
   },
 };
 
-//
+// ===================== BOIDS CONTROL =====================
 
 function create_boids(num: number) {
   boidsN = num;
@@ -171,13 +169,15 @@ function update_boids() {
     let vel2 = rule2(i);
     let vel3 = rule3(i);
     let vel4 = rule4(i);
+    let vel5 = rule5(i);
     boidsV[i].add(vel1).add(vel2).add(vel3);
     if (isSeeking) boidsV[i].add(vel4);
-    let vel5 = rule5(i);
     if (obstacleAvailable) boidsV[i].add(vel5);
-    // handle_boundary(i);
+    handle_boundary(i);
     limit_velocity(i);
+    correct_collision(i);
     boidsP[i].add(boidsV[i]);
+    if (check_collision(i)) console.log("collision detected");
     boidsTree.update(i);
   }
 }
@@ -226,18 +226,37 @@ function rule5(i: number): THREE.Vector3 {
   let dist: number;
   for (let j = 0; j < raderArray.length; j++) {
     dir = raderArray[j].clone().applyQuaternion(boidShapes[i].quaternion);
-    const ray = new THREE.Raycaster(boidShapes[i].position, dir, 0, visibilityRange);
+    const ray = new THREE.Raycaster(boidsP[i], dir, 0, visibilityRange);
     const intresects = ray.intersectObjects([...obstacles, bound]);
 
     if (intresects.length === 0) {
-      if (j == 0) return new THREE.Vector3();
+      if (j == 0) {
+        return new THREE.Vector3();
+      }
       break;
     }
     if (j == 0) {
       if (intresects.length !== 0) dist = intresects[0].distance;
     }
   }
-  return dir.multiplyScalar(1 * (visibilityRange / dist!) ** 2);
+  return dir.multiplyScalar(1 * (visibilityRange / dist!));
+}
+
+function correct_collision(i: number) {
+  const ray = new THREE.Raycaster(boidsP[i], boidsV[i].clone().normalize(), 0, boidsV[i].length());
+  const intresects = ray.intersectObjects([...obstacles, bound]);
+  if (intresects.length > 0) {
+    const dist = intresects[0].distance;
+    boidsV[i].normalize().multiplyScalar(dist / 2);
+  }
+}
+function check_collision(i: number): boolean {
+  const ray = new THREE.Raycaster(boidsP[i].clone().add(new THREE.Vector3(0, boundRange * 2, 0)), new THREE.Vector3(0, -1, 0), 0, boundRange * 2);
+  const intresects = ray.intersectObjects([...obstacles]);
+  if (intresects.length > 0) {
+    return true;
+  }
+  return false;
 }
 
 function handle_boundary(i: number) {
@@ -251,12 +270,76 @@ function limit_velocity(i: number) {
   if (vnorm > velocityLimit) boidsV[i].multiplyScalar(velocityLimit / vnorm);
 }
 
-function animate() {
-  update_boids();
-  draw_boids();
-  // visualize_obstacle_detection();
-  renderer.render(scene, camera);
+// ===================== GOAL SEEKING =====================
+
+let mouseTracker: THREE.Mesh;
+
+function create_mouse_tracking_ball() {
+  const sphereGeo = new THREE.SphereGeometry(1);
+  const sphereMat = new THREE.MeshStandardMaterial({
+    color: 0xffea00,
+  });
+  const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+  mouseTracker = sphereMesh;
+  scene.add(mouseTracker);
 }
+const mouse = new THREE.Vector2();
+const intersectionPoint = new THREE.Vector3();
+const planeNormal = new THREE.Vector3();
+const plane = new THREE.Plane();
+const raycaster = new THREE.Raycaster();
+
+window.addEventListener("mousemove", function (e) {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  planeNormal.copy(camera.position).normalize();
+  plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
+  raycaster.setFromCamera(mouse, camera);
+  raycaster.ray.intersectPlane(plane, intersectionPoint);
+  mouseTracker.position.copy(intersectionPoint);
+});
+
+// ===================== OBSTACLE & DETECTING =====================
+
+let obstacles: Array<THREE.Mesh> = [];
+
+function create_obstacle(num: number) {
+  obstacles = [];
+  for (let i = 0; i < num; i++) {
+    const radius = 3;
+    const height = boundRange * (1 + Math.random());
+    const x = (2 * Math.random() - 1) * (boundRange - radius);
+    const z = (2 * Math.random() - 1) * (boundRange - radius);
+    const obsGeo = new THREE.CylinderGeometry(radius, radius, height, 20);
+    const obsMat = new THREE.MeshStandardMaterial({
+      color: 0x999933,
+    });
+    const obsMesh = new THREE.Mesh(obsGeo, obsMat);
+    obsMesh.visible = obstacleAvailable;
+    obsMesh.position.copy(new THREE.Vector3(x, height / 2 - boundRange, z));
+    obsMesh.geometry.computeBoundingBox();
+
+    scene.add(obsMesh);
+    obstacles.push(obsMesh);
+  }
+}
+
+let raderArray: Array<THREE.Vector3> = [];
+function generate_rader(numPoints: number, frac: number) {
+  let turFraction = (1 + Math.sqrt(5)) / 2;
+  for (let i = 0; i < numPoints; i++) {
+    let t = i / (numPoints - 1);
+    let inclination = Math.acos(1 - t * (1 - Math.cos(frac * (Math.PI / 2))));
+    let azimuth = 2 * Math.PI * turFraction * i;
+
+    let x = Math.sin(inclination) * Math.cos(azimuth);
+    let z = Math.sin(inclination) * Math.sin(azimuth);
+    let y = Math.cos(inclination);
+    raderArray.push(new THREE.Vector3(x, y, z));
+  }
+}
+
+// ===================== INIT =====================
 
 function toggle_run() {
   isPlay = !isPlay;
@@ -291,129 +374,7 @@ function position_in_obstacles(P: THREE.Vector3): boolean {
   return false;
 }
 
-//
-
-let mouseTracker: THREE.Mesh;
-
-function create_mouse_tracking_ball() {
-  const sphereGeo = new THREE.SphereGeometry(1);
-  const sphereMat = new THREE.MeshStandardMaterial({
-    color: 0xffea00,
-  });
-  const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
-  mouseTracker = sphereMesh;
-  mouseTracker.visible = isSeeking;
-  scene.add(mouseTracker);
-}
-const mouse = new THREE.Vector2();
-const intersectionPoint = new THREE.Vector3();
-const planeNormal = new THREE.Vector3();
-const plane = new THREE.Plane();
-const raycaster = new THREE.Raycaster();
-
-window.addEventListener("mousemove", function (e) {
-  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  planeNormal.copy(camera.position).normalize();
-  plane.setFromNormalAndCoplanarPoint(planeNormal, scene.position);
-  raycaster.setFromCamera(mouse, camera);
-  raycaster.ray.intersectPlane(plane, intersectionPoint);
-  mouseTracker.position.copy(intersectionPoint);
-});
-
-//
-
-let obstacles: Array<THREE.Mesh> = [];
-
-function create_obstacle(num: number) {
-  obstacles = [];
-  for (let i = 0; i < num; i++) {
-    const radius = 3;
-    const height = boundRange * (1 + Math.random());
-    const x = (2 * Math.random() - 1) * (boundRange - radius);
-    const z = (2 * Math.random() - 1) * (boundRange - radius);
-    const obsGeo = new THREE.CylinderGeometry(radius, radius, height, 20);
-    const obsMat = new THREE.MeshStandardMaterial({
-      color: 0x999933,
-    });
-    const obsMesh = new THREE.Mesh(obsGeo, obsMat);
-    obsMesh.visible = obstacleAvailable;
-    obsMesh.position.copy(new THREE.Vector3(x, height / 2 - boundRange, z));
-    obsMesh.geometry.computeBoundingBox();
-    
-    scene.add(obsMesh);
-    obstacles.push(obsMesh);
-  }
-}
-
-let raderArray: Array<THREE.Vector3> = [];
-function generate_rader(numPoints: number, frac: number) {
-  let turFraction = (1 + Math.sqrt(5)) / 2;
-  for (let i = 0; i < numPoints; i++) {
-    let t = i / (numPoints - 1);
-    let inclination = Math.acos(1 - t * (1 - Math.cos(frac * (Math.PI / 2))));
-    let azimuth = 2 * Math.PI * turFraction * i;
-
-    let x = Math.sin(inclination) * Math.cos(azimuth);
-    let z = Math.sin(inclination) * Math.sin(azimuth);
-    let y = Math.cos(inclination);
-    raderArray.push(new THREE.Vector3(x, y, z));
-  }
-}
-
-function visualize_rader(len: number) {
-  for (let V of raderArray) {
-    const material = new THREE.LineBasicMaterial({
-      color: 0x0000ff,
-    });
-    const points = [];
-    points.push(new THREE.Vector3());
-    points.push(new THREE.Vector3().copy(V).multiplyScalar(len));
-
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const line = new THREE.Line(geometry, material);
-    boidShapes[0].add(line);
-
-    (boidShapes[0].material as THREE.MeshBasicMaterial).color = new THREE.Color(0x339933);
-  }
-}
-
-function visualize_obstacle_detection() {
-  for (let i = 0; i < raderArray.length; i++) {
-    let dir = new THREE.Vector3().copy(raderArray[i]).applyQuaternion(boidShapes[0].quaternion);
-    const ray = new THREE.Raycaster(boidShapes[0].position, dir, 0, visibilityRange);
-    const intersects = ray.intersectObjects([...obstacles, bound]);
-    ((boidShapes[0].children[i] as THREE.Line).material as THREE.MeshBasicMaterial).color = intersects.length === 0 ? new THREE.Color(0x00ff00) : new THREE.Color(0xff0000);
-  }
-}
-
-//
-
 function init_controllers() {
-  function generate_Slider(id: number, min: number, max: number, init: number, name: string) {
-    let ret = document.createElement("div");
-    ret.className = "sliderContainer";
-
-    let slider = document.createElement("input");
-    slider.setAttribute("type", "range");
-    slider.setAttribute("min", String(min));
-    slider.setAttribute("max", String(max));
-    slider.setAttribute("step", String((max - min) / 1000));
-    slider.setAttribute("value", String(init));
-    slider.className = "slider";
-    slider.id = "Slider" + String(id);
-
-    let label = document.createElement("label");
-    label.setAttribute("for", slider.id);
-    label.innerHTML = name;
-    let span = document.createElement("span");
-    span.id = "SliderValue" + String(id);
-    span.innerHTML = String(init);
-
-    ret.replaceChildren(slider, label, span);
-    return ret;
-  }
-
   let runButton = document.createElement("button");
   runButton.onclick = toggle_run;
   runButton.innerHTML = "run/pause";
@@ -428,26 +389,12 @@ function init_controllers() {
   trackingButton.id = "seekingController";
   document.getElementById("controller")?.appendChild(trackingButton);
   document!.getElementById("seekingController")!.oninput = function () {
-    isSeeking = (document!.getElementById("seekingController")! as HTMLInputElement).checked;
+    isSeeking = (document.getElementById("seekingController")! as HTMLInputElement).checked;
     mouseTracker.visible = isSeeking;
   };
-
-  document.getElementById("controller")?.appendChild(generate_Slider(0, 0, 5 * avoidFactor, avoidFactor, "avoidFactor"));
-  document!.getElementById("Slider0")!.oninput = function () {
-    avoidFactor = Number((document!.getElementById("Slider0")! as HTMLInputElement).value);
-    document!.getElementById("SliderValue0")!.innerHTML = String(avoidFactor.toFixed(4));
-  };
-  document.getElementById("controller")?.appendChild(generate_Slider(1, 0, 5 * alignFactor, alignFactor, "alignFactor"));
-  document!.getElementById("Slider1")!.oninput = function () {
-    alignFactor = Number((document!.getElementById("Slider1")! as HTMLInputElement).value);
-    document!.getElementById("SliderValue1")!.innerHTML = String(alignFactor.toFixed(4));
-  };
-  document.getElementById("controller")?.appendChild(generate_Slider(2, 0, 5 * cohesionFactor, cohesionFactor, "cohesionFactor"));
-  document!.getElementById("Slider2")!.oninput = function () {
-    cohesionFactor = Number((document!.getElementById("Slider2")! as HTMLInputElement).value);
-    document!.getElementById("SliderValue2")!.innerHTML = String(cohesionFactor.toFixed(4));
-  };
 }
+
+// ===================== MAIN =====================
 
 async function main() {
   const boid_num = 100;
@@ -456,11 +403,21 @@ async function main() {
   create_mouse_tracking_ball();
   draw_boids();
   init_controllers();
-
   generate_rader(100, 1.5);
-  // visualize_rader(visibilityRange);
 
+  let prevTime = 0;
+  let frameRate = 120;
   renderer.setAnimationLoop(animate);
+
+  function animate(timestamp: number) {
+    if (timestamp - prevTime > 1000 / frameRate) {
+      update_boids();
+      draw_boids();
+      mouseTracker.visible = isSeeking;
+      renderer.render(scene, camera);
+      prevTime = timestamp;
+    }
+  }
 }
 
 main();
