@@ -73,7 +73,7 @@ let cohesionFactor = 50;
 let seekingFactor = 3;
 
 let obstacleDetectRange = 10;
-let obstacleAvoidFactor = 1000;
+let obstacleAvoidFactor = 10000;
 
 let nearestCount = 10;
 
@@ -184,7 +184,8 @@ function update_boids(dt: number) {
   }
 }
 
-function rule1(i: number): THREE.Vector3 { // Seperation
+function rule1(i: number): THREE.Vector3 {
+  // Seperation
   let ret = new THREE.Vector3();
   let neighbors = boidsTree.nearest(i, nearestCount + 1, protectedRange);
   for (let j of neighbors) {
@@ -194,7 +195,8 @@ function rule1(i: number): THREE.Vector3 { // Seperation
   return ret.multiplyScalar(avoidFactor);
 }
 
-function rule2(i: number): THREE.Vector3 { // Alignment
+function rule2(i: number): THREE.Vector3 {
+  // Alignment
   let ret = new THREE.Vector3();
   let neighbors = boidsTree.nearest(i, nearestCount + 1, visibilityRange);
   if (neighbors.length <= 1) return ret;
@@ -205,7 +207,8 @@ function rule2(i: number): THREE.Vector3 { // Alignment
   return ret.multiplyScalar(alignFactor);
 }
 
-function rule3(i: number): THREE.Vector3 { // Cohesion
+function rule3(i: number): THREE.Vector3 {
+  // Cohesion
   let ret = new THREE.Vector3();
   let neighbors = boidsTree.nearest(i, nearestCount + 1, visibilityRange);
   if (neighbors.length <= 1) return ret;
@@ -216,13 +219,15 @@ function rule3(i: number): THREE.Vector3 { // Cohesion
   return ret.multiplyScalar(cohesionFactor);
 }
 
-function rule4(i: number): THREE.Vector3 { // Goal Seeking
+function rule4(i: number): THREE.Vector3 {
+  // Goal Seeking
   let ret = new THREE.Vector3().subVectors(mouseTracker.position, boidsP[i]).normalize();
   ret.subVectors(ret.multiplyScalar(velocityLimit), boidsV[i]);
   return ret.multiplyScalar(seekingFactor);
 }
 
-function rule5(i: number): THREE.Vector3 { // Obstacle Avoidance
+function rule5(i: number): THREE.Vector3 {
+  // Obstacle Avoidance
   let dist: number;
   for (let j = 0; j < raderArray.length; j++) {
     let dir = raderArray[j].clone().applyQuaternion(boidShapes[i].quaternion);
@@ -232,20 +237,11 @@ function rule5(i: number): THREE.Vector3 { // Obstacle Avoidance
     if (intresects.length === 0) {
       if (j === 0) return new THREE.Vector3();
       else {
-        return dir.multiplyScalar(obstacleAvoidFactor * (obstacleDetectRange / (dist! + 0.01)));
+        return dir.multiplyScalar(obstacleAvoidFactor / (dist! + 0.01));
       }
     } else if (j === 0) dist = intresects[0].distance;
   }
   return new THREE.Vector3();
-}
-
-function prevent_collision(i: number, dt: number) {
-  const ray = new THREE.Raycaster(boidsP[i], boidsV[i].clone().normalize(), 0, boidsV[i].length() * dt);
-  const intresects = ray.intersectObjects([...obstacles, bound]);
-  if (intresects.length > 0) {
-    const dist = intresects[0].distance;
-    boidsV[i].normalize().multiplyScalar(dist / (1.1 * dt));
-  }
 }
 
 function handle_boundary(i: number) {
@@ -260,6 +256,15 @@ function limit_velocity(i: number) {
   if (vnorm > velocityLimit) boidsV[i].multiplyScalar(velocityLimit / vnorm);
 }
 
+function prevent_collision(i: number, dt: number) {
+  const ray = new THREE.Raycaster(boidsP[i], boidsV[i].clone().normalize(), 0, boidsV[i].length() * dt);
+  const intresects = ray.intersectObjects([...obstacles, bound]);
+  if (intresects.length > 0) {
+    const dist = intresects[0].distance;
+    boidsV[i].normalize().multiplyScalar((0.9 * dist) / dt);
+  }
+}
+
 // ===================== GOAL SEEKING =====================
 
 let mouseTracker: THREE.Mesh;
@@ -272,13 +277,13 @@ function create_mouse_tracking_ball() {
   const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
   mouseTracker = sphereMesh;
   scene.add(mouseTracker);
-  
+
   const mouse = new THREE.Vector2();
   const intersectionPoint = new THREE.Vector3();
   const planeNormal = new THREE.Vector3();
   const plane = new THREE.Plane();
   const raycaster = new THREE.Raycaster();
-  
+
   window.addEventListener("mousemove", function (e) {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -317,11 +322,11 @@ function create_obstacle(num: number) {
 
 let raderArray: Array<THREE.Vector3> = [];
 function generate_rader(numPoints: number, frac: number) {
-  let turFraction = (1 + Math.sqrt(5)) / 2;
+  let turnFraction = (1 + Math.sqrt(5)) / 2;
   for (let i = 0; i < numPoints; i++) {
     let t = i / (numPoints - 1);
     let inclination = Math.acos(1 - t * (1 - Math.cos(frac * (Math.PI / 2))));
-    let azimuth = 2 * Math.PI * turFraction * i;
+    let azimuth = 2 * Math.PI * turnFraction * i;
 
     let x = Math.sin(inclination) * Math.cos(azimuth);
     let z = Math.sin(inclination) * Math.sin(azimuth);
@@ -388,13 +393,13 @@ function init_controllers() {
 // ===================== MAIN =====================
 
 async function main() {
-  const boid_num = 100;
+  const boid_num = 150;
   create_obstacle(3);
   create_boids(boid_num);
   create_mouse_tracking_ball();
   init_controllers();
   generate_rader(100, 1.5);
-  
+
   init_state();
 
   let prevTime = 0;

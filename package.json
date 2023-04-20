@@ -4,7 +4,8 @@
   "description": "",
   "main": "dist/bundle.js",
   "scripts": {
-    "start": "webpack serve",
+    "start": "npm run build && npm run serve",
+    "serve": "webpack serve",
     "build": "webpack",
     "watch": "webpack -w"
   },
