@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import * as Stats from "stats.js";
+import * as dat from "dat.gui";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as KD_TREE from "kd-tree-javascript";
 
@@ -337,10 +339,6 @@ function generate_rader(numPoints: number, frac: number) {
 
 // ===================== INIT =====================
 
-function toggle_run() {
-  isPlay = !isPlay;
-}
-
 function init_state() {
   boidsP = [];
   boidsV = [];
@@ -370,24 +368,28 @@ function position_in_obstacles(P: THREE.Vector3): boolean {
   return false;
 }
 
-function init_controllers() {
-  let runButton = document.createElement("button");
-  runButton.onclick = toggle_run;
-  runButton.innerHTML = "run/pause";
-  document.getElementById("controller")?.appendChild(runButton);
-  let resetButton = document.createElement("button");
-  resetButton.onclick = init_state;
-  resetButton.innerHTML = "reset";
-  document.getElementById("controller")?.appendChild(resetButton);
+// ===================== CONTROL =====================
 
-  let trackingButton = document.createElement("input");
-  trackingButton.setAttribute("type", "checkbox");
-  trackingButton.id = "seekingController";
-  document.getElementById("controller")?.appendChild(trackingButton);
-  document!.getElementById("seekingController")!.oninput = function () {
-    isSeeking = (document.getElementById("seekingController")! as HTMLInputElement).checked;
-    mouseTracker.visible = isSeeking;
+function initGUI() {
+  const controls = {
+    toggle_run: () => {
+      isPlay = !isPlay;
+    },
+    toggle_seeking: () => {
+      isSeeking = !isSeeking
+    },
+    reset: init_state,
   };
+
+  const gui = new dat.GUI();
+  gui.add(controls, "toggle_run").name("Pause/Unpause");
+  gui.add(controls, "reset").name("Reset");
+  gui.add(controls, "toggle_seeking").name("On/Off Goal Seeking");
+}
+
+function preventDefault() {
+  document.oncontextmenu = () => false;
+  document.onselectstart = () => false;
 }
 
 // ===================== MAIN =====================
@@ -397,20 +399,28 @@ async function main() {
   create_obstacle(3);
   create_boids(boid_num);
   create_mouse_tracking_ball();
-  init_controllers();
+  initGUI();
   generate_rader(100, 1.5);
 
   init_state();
+
+  const stats = new Stats();
+  document.body.appendChild(stats.dom);
+  preventDefault();
 
   let prevTime = 0;
   renderer.setAnimationLoop(animate);
 
   function animate(timestamp: number) {
     let timediff = (timestamp - prevTime) / 1000;
+
+    stats.begin();
     update_boids(timediff);
     draw_boids();
     mouseTracker.visible = isSeeking;
     renderer.render(scene, camera);
+    stats.end();
+
     prevTime = timestamp;
   }
 }
