@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import * as Stats from "stats.js";
 import * as dat from "dat.gui";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import * as KD_TREE from "kd-tree-javascript";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+
+import "./style/style.css";
 
 const scene = new THREE.Scene();
 const setcolor = "#000000";
@@ -376,7 +378,7 @@ function initGUI() {
       isPlay = !isPlay;
     },
     toggle_seeking: () => {
-      isSeeking = !isSeeking
+      isSeeking = !isSeeking;
     },
     reset: init_state,
   };
